@@ -4,19 +4,6 @@ import { Link, usePage, router } from "@inertiajs/vue3";
 
 const page = usePage();
 const user = computed(() => page.props.auth.user);
-const currentUrl = computed(() => page.url);
-
-const stats = computed(
-    () =>
-        page.props.userStats ?? {
-            total_sessions: 0,
-            completed_sessions: 0,
-            avg_score: null,
-            best_score: null,
-            this_week: 0,
-            weekly_activity: [0, 0, 0, 0, 0, 0, 0],
-        },
-);
 
 // ── Sidebar state ─────────────────────────────────────────
 const collapsed = ref(false);
@@ -98,31 +85,6 @@ const applyTheme = (dark) => {
 };
 const toggleDark = () => applyTheme(!isDark.value);
 
-// ── Avatar panel ──────────────────────────────────────────
-const showPanel = ref(false);
-const avatarBtn = ref(null);
-const panelPos = ref({});
-
-const togglePanel = () => {
-    if (!showPanel.value && avatarBtn.value) {
-        const r = avatarBtn.value.getBoundingClientRect();
-        panelPos.value = {
-            top: r.bottom + 10 + "px",
-            right: window.innerWidth - r.right + "px",
-        };
-    }
-    showPanel.value = !showPanel.value;
-};
-
-// Only closes the avatar panel, never touches the sidebar
-const closePanel = (e) => {
-    if (!showPanel.value) return;
-    const avatarEl = document.getElementById("avatar-btn");
-    const panelEl = document.getElementById("admin-panel");
-    if (avatarEl?.contains(e.target) || panelEl?.contains(e.target)) return;
-    showPanel.value = false;
-};
-
 // ── Lifecycle ─────────────────────────────────────────────
 onMounted(() => {
     const saved = localStorage.getItem("theme");
@@ -132,13 +94,10 @@ onMounted(() => {
     applyTheme(saved ? saved === "dark" : prefersDark);
     syncViewport();
     window.addEventListener("resize", syncViewport);
-    document.addEventListener("click", closePanel);
-
 });
 
 onUnmounted(() => {
     window.removeEventListener("resize", syncViewport);
-    document.removeEventListener("click", closePanel);
     if (closeTimeout) clearTimeout(closeTimeout);
 });
 
@@ -154,32 +113,6 @@ const initials = computed(() => {
 });
 
 const upperName = computed(() => user.value?.name?.toUpperCase() ?? "");
-
-// ── Stats helpers (for admin panel) ──────────────────────
-const scoreColor = (score) => {
-    if (score === null || score === undefined) return "var(--text-3)";
-    if (score >= 80) return "var(--green)";
-    if (score >= 60) return "var(--amber)";
-    return "var(--red)";
-};
-
-const scoreLabel = (score) => {
-    if (score === null || score === undefined) return "—";
-    return score + "/100";
-};
-
-const completionRate = computed(() => {
-    const t = stats.value.total_sessions;
-    const c = stats.value.completed_sessions;
-    if (!t) return 0;
-    return Math.round((c / t) * 100);
-});
-
-const weekDays = ["S", "M", "T", "W", "T", "F", "S"];
-const todayIndex = computed(() => new Date().getDay());
-const maxActivity = computed(() =>
-    Math.max(...(stats.value.weekly_activity ?? [0, 0, 0, 0, 0, 0, 0]), 1),
-);
 
 const logout = () => router.post(route("logout"));
 </script>
@@ -301,16 +234,7 @@ const logout = () => router.post(route("logout"));
                             v-else
                             @click.stop="collapsed = true"
                             title="Collapse sidebar"
-                            class="mr-3 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg border-0 bg-transparent transition-all duration-200"
-                            style="color: var(--text-3)"
-                            onmouseover="
-                                this.style.background = 'var(--accent-bg)';
-                                this.style.color = 'var(--accent)';
-                            "
-                            onmouseout="
-                                this.style.background = 'transparent';
-                                this.style.color = 'var(--text-3)';
-                            "
+                            class="mr-3 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg border-0 bg-transparent text-[var(--text-3)] transition-all duration-200 hover:bg-[var(--accent-bg)] hover:text-[var(--accent)]"
                         >
                             <svg
                                 width="15"
@@ -500,7 +424,7 @@ const logout = () => router.post(route("logout"));
 
             <!-- MAIN COLUMN -->
             <div
-                class="flex min-w-0 flex-1 flex-col overflow-hidden"
+                class="flex min-w-0 flex-1 flex-col overflow-hidden max-w-[1440px] mx-auto"
                 style="background: var(--bg-surface)"
             >
                 <!-- Topbar -->
@@ -537,7 +461,7 @@ const logout = () => router.post(route("logout"));
                         </button>
 
                         <h1
-                            class="truncate text-[13px] sm:text-[15px] font-extrabold leading-none tracking-tight"
+                            class="truncate text-[13px] sm:text-[15px] font-extrabold leading-tight tracking-tight"
                             style="color: var(--text)"
                         >
                             <slot name="title">Rehearse</slot>
@@ -624,35 +548,22 @@ const logout = () => router.post(route("logout"));
                             >
                                 {{ upperName }}
                             </div>
-                            <div
-                                class="text-[10px]"
-                                style="color: var(--text-3)"
-                            >
-                                {{ user?.email }}
-                            </div>
                         </div>
 
-                        <button
-                            id="avatar-btn"
-                            ref="avatarBtn"
-                            @click.stop="togglePanel"
-                            class="avatar !h-8 sm:!h-9 !w-8 sm:!w-9 !text-xs cursor-pointer border-0 bg-transparent p-0 transition-all duration-150"
-                            :style="
-                                showPanel
-                                    ? 'box-shadow: 0 0 0 2px var(--accent), 0 0 0 4px var(--accent-bg-hover)'
-                                    : ''
-                            "
-                        >
+                        <div class="avatar !h-8 sm:!h-9 !w-8 sm:!w-9 !text-xs">
                             {{ initials }}
-                        </button>
+                        </div>
                     </div>
                 </header>
 
                 <!-- Page content -->
-                <main class="flex-1 overflow-y-auto min-h-0">
-                    <div class="min-h-[calc(100vh-56px)]">
+                <main class="flex min-h-0 flex-1 flex-col overflow-hidden">
+                    <div
+                        class="min-h-0 flex-1 overflow-y-auto"
+                        style="background: var(--bg)"
+                    >
                         <Transition name="v" mode="out-in">
-                            <div :key="$page.url">
+                            <div :key="$page.url" class="min-h-full">
                                 <slot />
                             </div>
                         </Transition>
@@ -660,330 +571,5 @@ const logout = () => router.post(route("logout"));
                 </main>
             </div>
         </div>
-
-        <!-- ADMIN PANEL -->
-        <Teleport to="body">
-            <Transition
-                enter-active-class="transition-all duration-200 origin-top-right"
-                enter-from-class="opacity-0 scale-95 -translate-y-1"
-                enter-to-class="opacity-100 scale-100 translate-y-0"
-                leave-active-class="transition-all duration-150 origin-top-right"
-                leave-from-class="opacity-100 scale-100 translate-y-0"
-                leave-to-class="opacity-0 scale-95 -translate-y-1"
-            >
-                <div
-                    v-if="showPanel"
-                    id="admin-panel"
-                    class="fixed z-[9999] w-[290px] sm:w-[300px] overflow-hidden rounded-2xl border"
-                    :style="{
-                        top: panelPos.top,
-                        right: panelPos.right,
-                        background: 'var(--bg-surface)',
-                        borderColor: 'var(--border-strong)',
-                        boxShadow: 'var(--shadow-lg)',
-                    }"
-                >
-                    <!-- Panel header -->
-                    <div
-                        class="relative overflow-hidden px-5 py-4"
-                        style="background: var(--accent-bg)"
-                    >
-                        <div
-                            class="pointer-events-none absolute inset-0"
-                            style="
-                                background: radial-gradient(
-                                    circle at 80% 50%,
-                                    var(--accent-bg-hover),
-                                    transparent 60%
-                                );
-                            "
-                        />
-                        <div class="relative">
-                            <div
-                                class="mb-0.5 text-[10px] font-bold uppercase tracking-widest"
-                                style="color: var(--accent); opacity: 0.85"
-                            >
-                                My Progress
-                            </div>
-                            <div
-                                class="text-sm font-bold"
-                                style="color: var(--text)"
-                            >
-                                {{ upperName }}
-                            </div>
-                            <div
-                                class="mt-0.5 text-[11px]"
-                                style="color: var(--text-3)"
-                            >
-                                {{ user?.email }}
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Stats row -->
-                    <div
-                        class="grid grid-cols-3 border-b"
-                        style="border-color: var(--border)"
-                    >
-                        <div
-                            v-for="(stat, i) in [
-                                {
-                                    label: 'Sessions',
-                                    value: stats.total_sessions,
-                                    colored: false,
-                                },
-                                {
-                                    label: 'Done',
-                                    value: stats.completed_sessions,
-                                    colored: false,
-                                },
-                                {
-                                    label: 'Avg',
-                                    value: scoreLabel(stats.avg_score),
-                                    colored: true,
-                                    raw: stats.avg_score,
-                                },
-                            ]"
-                            :key="i"
-                            class="flex flex-col items-center justify-center px-2 py-3 text-center"
-                            :class="i < 2 ? 'border-r' : ''"
-                            :style="i < 2 ? 'border-color: var(--border)' : ''"
-                        >
-                            <span
-                                class="text-lg font-extrabold leading-none"
-                                :style="
-                                    stat.colored
-                                        ? `color: ${scoreColor(stat.raw)}`
-                                        : 'color: var(--text)'
-                                "
-                                >{{ stat.value }}</span
-                            >
-                            <span
-                                class="mt-1 text-[10px] font-medium"
-                                style="color: var(--text-3)"
-                                >{{ stat.label }}</span
-                            >
-                        </div>
-                    </div>
-
-                    <!-- Completion rate -->
-                    <div class="px-5 pb-3 pt-4">
-                        <div class="mb-1.5 flex items-center justify-between">
-                            <span
-                                class="text-[11px] font-semibold"
-                                style="color: var(--text-2)"
-                                >Completion Rate</span
-                            >
-                            <span
-                                class="text-[11px] font-bold"
-                                style="color: var(--accent)"
-                                >{{ completionRate }}%</span
-                            >
-                        </div>
-                        <div
-                            class="h-1.5 w-full overflow-hidden rounded-full"
-                            style="background: var(--border)"
-                        >
-                            <div
-                                class="h-full rounded-full transition-all duration-700"
-                                style="background: var(--gradient-accent)"
-                                :style="{ width: completionRate + '%' }"
-                            />
-                        </div>
-                    </div>
-
-                    <!-- Weekly bars -->
-                    <div class="px-5 pb-4">
-                        <div class="mb-3 flex items-center justify-between">
-                            <span
-                                class="text-[11px] font-semibold"
-                                style="color: var(--text-2)"
-                                >This Week</span
-                            >
-                            <span
-                                class="text-[11px]"
-                                style="color: var(--text-3)"
-                            >
-                                {{ stats.this_week }} session{{
-                                    stats.this_week !== 1 ? "s" : ""
-                                }}
-                            </span>
-                        </div>
-                        <div class="flex h-10 items-end justify-between gap-1">
-                            <div
-                                v-for="(
-                                    count, idx
-                                ) in stats.weekly_activity ?? [
-                                    0, 0, 0, 0, 0, 0, 0,
-                                ]"
-                                :key="idx"
-                                class="flex flex-1 flex-col items-center gap-1"
-                            >
-                                <div
-                                    class="w-full transition-all duration-500"
-                                    :style="{
-                                        height:
-                                            count > 0
-                                                ? Math.max(
-                                                      6,
-                                                      Math.round(
-                                                          (count /
-                                                              maxActivity) *
-                                                              32,
-                                                      ),
-                                                  ) + 'px'
-                                                : '4px',
-                                        background:
-                                            idx === todayIndex
-                                                ? 'var(--gradient-accent)'
-                                                : count > 0
-                                                  ? 'var(--accent-bg-hover)'
-                                                  : 'var(--border)',
-                                        boxShadow:
-                                            idx === todayIndex && count > 0
-                                                ? 'var(--shadow-btn)'
-                                                : 'none',
-                                        borderRadius: '3px',
-                                    }"
-                                />
-                                <span
-                                    class="text-[9px] font-medium"
-                                    :style="
-                                        idx === todayIndex
-                                            ? 'color: var(--accent)'
-                                            : 'color: var(--text-3)'
-                                    "
-                                    >{{ weekDays[idx] }}</span
-                                >
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Best score -->
-                    <div
-                        class="flex items-center justify-between border-t px-5 py-3"
-                        style="border-color: var(--border)"
-                    >
-                        <div>
-                            <span
-                                class="text-[10px] font-semibold uppercase tracking-wider"
-                                style="color: var(--text-3)"
-                                >Best Score</span
-                            >
-                            <div
-                                class="text-sm font-extrabold"
-                                :style="`color: ${scoreColor(stats.best_score)}`"
-                            >
-                                {{ scoreLabel(stats.best_score) }}
-                            </div>
-                        </div>
-                        <svg width="40" height="40" viewBox="0 0 40 40">
-                            <circle
-                                cx="20"
-                                cy="20"
-                                r="15"
-                                fill="none"
-                                stroke="var(--border-strong)"
-                                stroke-width="3"
-                            />
-                            <circle
-                                cx="20"
-                                cy="20"
-                                r="15"
-                                fill="none"
-                                :stroke="scoreColor(stats.best_score)"
-                                stroke-width="3"
-                                stroke-linecap="round"
-                                :stroke-dasharray="2 * Math.PI * 15"
-                                :stroke-dashoffset="
-                                    2 *
-                                    Math.PI *
-                                    15 *
-                                    (1 - (stats.best_score ?? 0) / 100)
-                                "
-                                transform="rotate(-90 20 20)"
-                                style="transition: stroke-dashoffset 0.7s ease"
-                            />
-                            <text
-                                x="20"
-                                y="24"
-                                text-anchor="middle"
-                                font-size="9"
-                                font-weight="700"
-                                fill="var(--text)"
-                            >
-                                {{ stats.best_score ?? "—" }}
-                            </text>
-                        </svg>
-                    </div>
-
-                    <!-- Panel footer -->
-                    <div
-                        class="flex border-t"
-                        style="border-color: var(--border)"
-                    >
-                        <Link
-                            :href="route('profile.edit')"
-                            @click="showPanel = false"
-                            class="flex flex-1 items-center justify-center gap-1.5 border-r py-2.5 text-xs font-medium transition-colors duration-150"
-                            style="
-                                color: var(--text-2);
-                                border-color: var(--border);
-                            "
-                            onmouseover="
-                                this.style.background = 'var(--accent-bg)';
-                                this.style.color = 'var(--accent)';
-                            "
-                            onmouseout="
-                                this.style.background = 'transparent';
-                                this.style.color = 'var(--text-2)';
-                            "
-                        >
-                            <svg
-                                class="h-3.5 w-3.5"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                stroke-width="2"
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                            >
-                                <path
-                                    d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"
-                                />
-                                <circle cx="12" cy="7" r="4" />
-                            </svg>
-                            Edit Profile
-                        </Link>
-                        <button
-                            @click="logout"
-                            class="flex flex-1 cursor-pointer items-center justify-center gap-1.5 border-0 bg-transparent py-2.5 font-[inherit] text-xs font-medium transition-colors duration-150"
-                            style="color: var(--red)"
-                            onmouseover="
-                                this.style.background = 'var(--red-bg)'
-                            "
-                            onmouseout="this.style.background = 'transparent'"
-                        >
-                            <svg
-                                class="h-3.5 w-3.5"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                stroke-width="2"
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                            >
-                                <path
-                                    d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"
-                                />
-                                <polyline points="16 17 21 12 16 7" />
-                                <line x1="21" y1="12" x2="9" y2="12" />
-                            </svg>
-                            Log out
-                        </button>
-                    </div>
-                </div>
-            </Transition>
-        </Teleport>
     </div>
 </template>

@@ -27,25 +27,24 @@ const props = defineProps({
         }),
     },
     recentSessions: { type: Array, default: () => [] },
-    featuredScenarios: { type: Array, default: () => [] },
 });
 
 const greeting = computed(() => {
     const h = new Date().getHours();
-    if (h < 12) return "Good Morning ";
-    if (h < 17) return "Good Afternoon ";
-    return "Good Evening ";
+    if (h < 12) return "Good morning";
+    if (h < 17) return "Good afternoon";
+    return "Good evening";
 });
 
 const userName = computed(() => {
-    const name = props.stats.userName ?? user.value?.name ?? "there";
-    return name.toUpperCase();
+    const name = props.stats.userName ?? "there";
+    return name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
 });
 
 function formatDate(d) {
     const date = new Date(d);
     const diff = Math.floor((new Date() - date) / 86400000);
-    if (diff === 0) return "Today";
+    if (diff <= 0) return "Today";
     if (diff === 1) return "Yesterday";
     if (diff < 7) return `${diff}d ago`;
     return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
@@ -54,155 +53,174 @@ function formatDate(d) {
 function scoreColor(score) {
     if (score === null || score === undefined)
         return { text: "var(--text-3)", bg: "var(--border)" };
-    if (score >= 80) return { text: "#f59e0b", bg: "rgba(245,158,11,0.1)" };
-    if (score >= 60) return { text: "#10b981", bg: "rgba(16,185,129,0.1)" };
-    return { text: "#ef4444", bg: "rgba(239,68,68,0.1)" };
+    if (score >= 80) return { text: "var(--green)", bg: "var(--green-bg)" };
+    if (score >= 60) return { text: "var(--amber)", bg: "var(--amber-bg)" };
+    return { text: "var(--red)", bg: "var(--red-bg)" };
 }
 
+// ── Weekly activity ───────────────────────────────────────
 const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const todayIdx = new Date().getDay();
+const DOT_ROWS = 7;
 
-const maxActivity = computed(() =>
-    Math.max(...(props.stats.weeklyActivity ?? [0, 0, 0, 0, 0, 0, 0]), 1),
+const activityHistory = computed(
+    () => props.stats.weeklyActivity ?? [0, 0, 0, 0, 0, 0, 0],
 );
 
-// Sparkline SVG path generator
-function sparklinePath(points, w, h) {
-    if (!points || points.length === 0) return "";
-    const max = Math.max(...points, 1);
-    const min = Math.min(...points);
-    const range = max - min || 1;
-    const step = w / (points.length - 1);
-    return points
-        .map((v, i) => {
-            const x = i * step;
-            const y = h - ((v - min) / range) * (h - 4) - 2;
-            return `${i === 0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`;
-        })
-        .join(" ");
+function filledDots(value) {
+    if (value <= 0) return 0;
+    return Math.min(value, DOT_ROWS);
 }
 
-const sessionSparkData = computed(() => {
-    const activity = props.stats.weeklyActivity ?? [0, 0, 0, 0, 0, 0, 0];
-    const scores = props.recentSessions
-        .slice(0, 10)
-        .map((s) => s.score ?? 50)
-        .reverse();
-    const streakTrend = activity.map((_, i) =>
-        activity.slice(0, i + 1).reduce((a, b) => a + b, 0),
-    );
-    return {
-        sessions: streakTrend.length ? streakTrend : [0, 1, 1, 2, 2, 3, 3],
-        completed: activity,
-        score:
-            scores.length >= 2
-                ? scores
-                : [50, 55, 60, 65, 70, 72, 75, 78, 80, 85],
-        streak: activity.map((v, i) =>
-            i <= todayIdx ? (v > 0 ? i + 1 : 0) : 0,
-        ),
-    };
+// ── Level / progress ──────────────────────────────────────
+const currentLevel = computed(() => {
+    const s = props.stats.completedSessions;
+    if (s >= 20) return { label: "Level 4", title: "Advanced Communicator" };
+    if (s >= 10)
+        return { label: "Level 3", title: "Intermediate Communicator" };
+    if (s >= 5) return { label: "Level 2", title: "Developing Speaker" };
+    return { label: "Level 1", title: "Beginner" };
 });
 
-const statCards = computed(() => [
-    {
-        label: "Total Sessions",
-        value: props.stats.totalSessions,
-        sub: `+${props.stats.thisWeek ?? 0} this week`,
-        subColor: "#7c3aed",
-        icon: "layers",
-        accent: "#7c3aed",
-        glow: "rgba(124,58,237,0.08)",
-        sparkColor: "#7c3aed",
-        sparkData: sessionSparkData.value.sessions,
-    },
-    {
-        label: "Completed Sessions",
-        value: props.stats.completedSessions,
-        sub: `+${props.stats.completedThisWeek ?? 0} this week`,
-        subColor: "#10b981",
-        icon: "check-circle",
-        accent: "#10b981",
-        glow: "rgba(16,185,129,0.08)",
-        sparkColor: "#10b981",
-        sparkData: sessionSparkData.value.completed,
-    },
-    {
-        label: "Best Score",
-        value:
-            props.stats.bestScore !== null
-                ? props.stats.bestScore + "/100"
-                : "—",
-        sub:
-            props.stats.bestScore !== null
-                ? `+${props.stats.scoreImprovement ?? 0} from last month`
-                : "No sessions yet",
-        subColor: "#f59e0b",
-        icon: "star",
-        accent:
-            props.stats.bestScore >= 80
-                ? "#f59e0b"
-                : props.stats.bestScore >= 60
-                  ? "#f59e0b"
-                  : "#7c3aed",
-        glow: "rgba(245,158,11,0.08)",
-        sparkColor: "#f59e0b",
-        sparkData: sessionSparkData.value.score,
-    },
-    {
-        label: "Day Streak",
-        value: props.stats.currentStreak,
-        sub: `Best: ${props.stats.bestStreak ?? props.stats.currentStreak} days`,
-        subColor: "#f97316",
-        icon: "flame",
-        accent: "#f97316",
-        glow: "rgba(249,115,22,0.08)",
-        sparkColor: "#f97316",
-        sparkData: sessionSparkData.value.streak,
-    },
-]);
+const levelProgress = computed(() => {
+    const s = props.stats.completedSessions ?? 0;
+    if (s >= 20) return 1;
+    if (s >= 10) return (s - 10) / 10;
+    if (s >= 5) return (s - 5) / 5;
+    return s / 5;
+});
 
+// ── Skills ────────────────────────────────────────────────
 const skills = [
-    {
-        key: "clarity",
-        label: "Clarity",
-        // chat bubble icon path
-        iconPath:
-            "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z",
-    },
-    {
-        key: "confidence",
-        label: "Confidence",
-        // user icon
-        iconPath:
-            "M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2 M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z",
-    },
-    {
-        key: "objective",
-        label: "Objective",
-        // target icon
-        iconPath:
-            "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z M12 18a6 6 0 1 0 0-12 6 6 0 0 0 0 12z M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4z",
-    },
-    {
-        key: "adaptability",
-        label: "Adaptability",
-        // refresh icon
-        iconPath:
-            "M23 4v6h-6 M1 20v-6h6 M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15",
-    },
+    { key: "clarity", label: "Clarity" },
+    { key: "confidence", label: "Confidence" },
+    { key: "objective", label: "Objective" },
+    { key: "adaptability", label: "Adaptability" },
 ];
 
-function scenarioAccent(scenario) {
-    const map = {
-        purple: { color: "var(--accent)", bg: "var(--accent-bg)" },
-        pink: { color: "#ec4899", bg: "rgba(236,72,153,0.1)" },
-        teal: { color: "#10b981", bg: "rgba(16,185,129,0.1)" },
-        amber: { color: "#f59e0b", bg: "rgba(245,158,11,0.1)" },
-        blue: { color: "#6366f1", bg: "rgba(99,102,241,0.1)" },
-        coral: { color: "#ef4444", bg: "rgba(239,68,68,0.1)" },
+const skillsWithMeta = computed(() => {
+    const avgs = props.stats.skillAvgs ?? {};
+    const deltas = props.stats.skillDeltas ?? {};
+    const hasData = (props.stats.completedSessions ?? 0) > 0;
+
+    return skills.map((skill) => {
+        const value = hasData ? (avgs[skill.key] ?? 0) : 0;
+        const delta = hasData ? (deltas[skill.key] ?? 0) : 0;
+
+        return {
+            ...skill,
+            value,
+            delta,
+            isPending: value === 0,
+        };
+    });
+});
+
+function chartCoords(points, w, h, yMin = 0, yMax = 100) {
+    if (!points?.length) return [];
+    const range = yMax - yMin || 1;
+    const innerH = h - 8;
+    const step = points.length > 1 ? w / (points.length - 1) : 0;
+
+    return points.map((v, i) => ({
+        x: +(points.length > 1 ? i * step : w / 2).toFixed(1),
+        y: +(h - 4 - ((v - yMin) / range) * innerH).toFixed(1),
+    }));
+}
+
+function linePath(points, w, h, yMin = 0, yMax = 100) {
+    const coords = chartCoords(points, w, h, yMin, yMax);
+    if (!coords.length) return "";
+    if (coords.length === 1) {
+        const y = coords[0].y;
+        return `M 0 ${y} L ${w} ${y}`;
+    }
+    return `M ${coords.map((c) => `${c.x} ${c.y}`).join(" L ")}`;
+}
+
+function areaPath(points, w, h, yMin = 0, yMax = 100) {
+    const coords = chartCoords(points, w, h, yMin, yMax);
+    if (!coords.length) return "";
+    if (coords.length === 1) {
+        const y = coords[0].y;
+        return `M 0 ${h} L 0 ${y} L ${w} ${y} L ${w} ${h} Z`;
+    }
+    const line = coords.map((c) => `${c.x} ${c.y}`).join(" L ");
+    return `M ${line} L ${w} ${h} L 0 ${h} Z`;
+}
+
+function lastPoint(points, w, h, yMin = 0, yMax = 100) {
+    const coords = chartCoords(points, w, h, yMin, yMax);
+    if (!coords.length) return { x: w / 2, y: h / 2 };
+    return coords[coords.length - 1];
+}
+
+const scoreHistory = computed(() =>
+    [...props.recentSessions]
+        .reverse()
+        .map((s) => s.score)
+        .filter((s) => s !== null && s !== undefined),
+);
+
+const hasBestScore = computed(
+    () => props.stats.bestScore !== null && props.stats.bestScore !== undefined,
+);
+
+const hasScoreChart = computed(() => scoreHistory.value.length > 0);
+
+const sparkEndpoint = computed(() => lastPoint(scoreHistory.value, 240, 64));
+
+// ── Radar chart ───────────────────────────────────────────
+const RADAR_CX = 100;
+const RADAR_CY = 100;
+const RADAR_MAX_R = 72;
+const RADAR_ANGLES = [-90, 0, 90, 180];
+
+function radarPoint(value, angleDeg, cx, cy, maxR) {
+    const r = (Math.max(0, Math.min(value, 100)) / 100) * maxR;
+    const rad = (angleDeg * Math.PI) / 180;
+    return {
+        x: +(cx + r * Math.cos(rad)).toFixed(1),
+        y: +(cy + r * Math.sin(rad)).toFixed(1),
     };
-    return map[scenario?.color] ?? map.purple;
+}
+
+const radarSkills = computed(() =>
+    skillsWithMeta.value.map((skill, i) => ({
+        ...skill,
+        axis: radarPoint(100, RADAR_ANGLES[i], RADAR_CX, RADAR_CY, RADAR_MAX_R),
+        point: radarPoint(
+            skill.isPending ? 0 : skill.value,
+            RADAR_ANGLES[i],
+            RADAR_CX,
+            RADAR_CY,
+            RADAR_MAX_R,
+        ),
+        labelPos: radarPoint(
+            118,
+            RADAR_ANGLES[i],
+            RADAR_CX,
+            RADAR_CY,
+            RADAR_MAX_R,
+        ),
+    })),
+);
+
+const radarPolygon = computed(() =>
+    radarSkills.value.map((s) => `${s.point.x},${s.point.y}`).join(" "),
+);
+
+const radarGridRings = [25, 50, 75, 100];
+
+function skillAxisLabel(key) {
+    return (
+        {
+            clarity: "Clarity",
+            confidence: "Conf.",
+            objective: "Object.",
+            adaptability: "Adapt.",
+        }[key] ?? key
+    );
 }
 </script>
 
@@ -211,747 +229,980 @@ function scenarioAccent(scenario) {
     <AuthenticatedLayout>
         <template #title>Dashboard</template>
 
-        <div class="p-4 md:p-6 space-y-5">
-            <!-- ── GREETING BANNER ─────────────────────────────── -->
+        <div
+            class="flex h-full flex-col overflow-y-auto p-5 md:p-6 lg:overflow-hidden"
+        >
             <div
-                class="relative overflow-hidden rounded-2xl border"
-                style="
-                    background: var(--banner-bg);
-                    border-color: var(--banner-border);
-                "
+                class="flex flex-col gap-5 lg:min-h-0 lg:flex-1 lg:flex-row lg:gap-6"
             >
+                <!-- ── LEFT COLUMN ──────────────────────────────── -->
                 <div
-                    class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-6 px-4 py-5 sm:px-7 sm:py-6"
+                    class="flex w-full flex-col gap-5 lg:h-full lg:min-h-0 lg:w-[62%] lg:flex-shrink-0 lg:overflow-hidden"
                 >
-                    <!-- Left: greeting text -->
-                    <div class="relative z-10 flex-1 min-w-0">
-                        <p
-                            class="text-[11px] sm:text-[13px] font-medium"
-                            style="color: var(--text-2)"
-                        >
-                            {{ greeting }},
-                            <strong
-                                class="font-extrabold"
-                                style="color: var(--text)"
-                                >{{ userName }}</strong
-                            >
-                        </p>
-                        <h2
-                            class="mt-1 text-[clamp(1rem,4vw,1.6rem)] font-extrabold leading-tight tracking-tight"
-                            style="color: var(--text)"
-                        >
-                            Keep practicing, keep growing!
-                        </h2>
-                        <p
-                            class="mt-1 text-[11px] sm:text-[12px]"
-                            style="color: var(--text-2)"
-                        >
-                            {{
-                                stats.currentStreak > 0
-                                    ? `You're on a great streak. Let's continue your progress.`
-                                    : "Ready to practice? Pick a scenario below."
-                            }}
-                        </p>
-                        <Link
-                            :href="route('scenarios.index')"
-                            class="mt-4 inline-flex items-center gap-1.5 rounded-full px-4 sm:px-5 py-2 text-[11px] sm:text-[12px] font-semibold text-white transition-all min-h-[44px] sm:min-h-auto justify-center sm:justify-start"
-                            style="
-                                background: var(--gradient-accent);
-                                box-shadow: var(--shadow-btn);
-                            "
-                            onmouseover="
-                                this.style.opacity = '0.9';
-                                this.style.transform = 'translateY(-1px)';
-                            "
-                            onmouseout="
-                                this.style.opacity = '1';
-                                this.style.transform = 'translateY(0)';
-                            "
-                        >
-                            Start Practice
-                            <svg
-                                width="12"
-                                height="12"
-                                viewBox="0 0 12 12"
-                                fill="none"
-                            >
-                                <path
-                                    d="M2 6h8M6 2l4 4-4 4"
-                                    stroke="currentColor"
-                                    stroke-width="1.5"
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                />
-                            </svg>
-                        </Link>
-                    </div>
-
-                    <!-- Right: level card (hidden on mobile) -->
+                    <!-- BANNER CARD -->
                     <div
-                        class="relative z-10 hidden sm:flex flex-col items-center gap-2 flex-shrink-0 rounded-2xl px-5 py-4"
+                        class="rounded-2xl overflow-hidden relative flex-shrink-0"
                         style="
-                            background: var(--banner-level-bg);
-                            border: 1px solid var(--border-strong);
+                            background: var(--bg-surface);
+                            border: 1px solid var(--border);
                             box-shadow: var(--shadow-md);
                         "
                     >
-                        <div class="flex items-center gap-3">
-                            <!-- Hexagon icon badge -->
+                        <!-- Decorative orbs — speech/mic shapes for interview coaching -->
+                        <div
+                            style="
+                                position: absolute;
+                                inset: 0;
+                                overflow: hidden;
+                                pointer-events: none;
+                            "
+                        >
+                            <!-- Large orb -->
+                            <div
+                                style="
+                                    position: absolute;
+                                    right: -24px;
+                                    top: -32px;
+                                    width: 180px;
+                                    height: 180px;
+                                    border-radius: 50%;
+                                    background: var(--accent-bg);
+                                    opacity: 0.7;
+                                "
+                            />
+                            <!-- Medium orb -->
+                            <div
+                                style="
+                                    position: absolute;
+                                    right: 80px;
+                                    bottom: -20px;
+                                    width: 110px;
+                                    height: 110px;
+                                    border-radius: 50%;
+                                    background: var(--accent-bg);
+                                    opacity: 0.45;
+                                "
+                            />
+                            <!-- Small orb -->
+                            <div
+                                style="
+                                    position: absolute;
+                                    right: 200px;
+                                    top: 10px;
+                                    width: 60px;
+                                    height: 60px;
+                                    border-radius: 50%;
+                                    background: var(--accent-bg);
+                                    opacity: 0.3;
+                                "
+                            />
+                        </div>
+
+                        <!-- Content -->
+                        <div
+                            class="relative z-10 flex flex-col justify-between px-5 py-5 sm:px-7 sm:py-6"
+                        >
+                            <!-- Top row -->
+                            <div>
+                                <p
+                                    class="mb-1 text-[11px] font-medium uppercase tracking-widest"
+                                    style="color: var(--text-3)"
+                                >
+                                    {{ greeting }}, {{ userName }}
+                                </p>
+                                <h1
+                                    class="text-xl font-bold leading-tight tracking-tight sm:text-[1.75rem]"
+                                    style="color: var(--text)"
+                                >
+                                    {{
+                                        stats.completedSessions > 0
+                                            ? `${stats.completedSessions} sessions completed.`
+                                            : "Ready to practice?"
+                                    }}
+                                </h1>
+                                <p
+                                    class="mt-1 text-[12px]"
+                                    style="color: var(--text-3)"
+                                >
+                                    {{
+                                        stats.bestScore
+                                            ? `Best score ${stats.bestScore}/100 · ${currentLevel.title}`
+                                            : "Pick a scenario below to start your first session."
+                                    }}
+                                </p>
+                            </div>
+
+                            <!-- Bottom row: stack on mobile, side-by-side from md -->
+                            <div
+                                class="mt-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between"
+                            >
+                                <div
+                                    class="flex flex-col gap-2.5 sm:flex-row sm:flex-wrap"
+                                >
+                                    <Link
+                                        :href="route('scenarios.index')"
+                                        class="btn-primary justify-center px-4 py-2 text-center text-[12px]"
+                                    >
+                                        Start Practice
+                                        <svg
+                                            width="11"
+                                            height="11"
+                                            viewBox="0 0 12 12"
+                                            fill="none"
+                                        >
+                                            <path
+                                                d="M2 6h8M6 2l4 4-4 4"
+                                                stroke="currentColor"
+                                                stroke-width="1.5"
+                                                stroke-linecap="round"
+                                                stroke-linejoin="round"
+                                            />
+                                        </svg>
+                                    </Link>
+                                    <Link
+                                        :href="route('scenarios.index')"
+                                        class="rounded-lg border px-4 py-2 text-center text-[12px] font-medium transition-colors hover:bg-[var(--bg-surface2)]"
+                                        style="
+                                            color: var(--text-2);
+                                            border-color: var(--border-strong);
+                                        "
+                                    >
+                                        Browse Scenarios
+                                    </Link>
+                                </div>
+
+                                <!-- Level badge -->
+                                <div
+                                    class="w-full border-t pt-4 md:w-auto md:border-t-0 md:pt-0 md:text-right"
+                                    style="border-color: var(--border)"
+                                >
+                                    <div
+                                        class="text-[11px] font-semibold"
+                                        style="color: var(--text-2)"
+                                    >
+                                        {{ currentLevel.label }}
+                                        <span
+                                            class="font-normal"
+                                            style="color: var(--text-3)"
+                                        >
+                                            ·
+                                            <span class="hidden sm:inline">{{
+                                                currentLevel.title
+                                            }}</span>
+                                            <span class="sm:hidden">{{
+                                                currentLevel.title.split(" ")[0]
+                                            }}</span>
+                                        </span>
+                                    </div>
+                                    <div
+                                        class="mt-1 h-[3px] w-full max-w-[8rem] rounded-full overflow-hidden md:ml-auto"
+                                        style="background: var(--track-bg)"
+                                    >
+                                        <div
+                                            class="h-full rounded-full transition-all duration-700"
+                                            :style="{
+                                                width:
+                                                    levelProgress * 100 + '%',
+                                                background:
+                                                    'var(--gradient-primary)',
+                                            }"
+                                        />
+                                    </div>
+                                    <div
+                                        class="mt-0.5 text-[10px]"
+                                        style="color: var(--text-3)"
+                                    >
+                                        {{ Math.round(levelProgress * 100) }}%
+                                        to next level
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- TWO STAT CARDS SIDE BY SIDE (stack below sm) -->
+                    <div
+                        class="grid grid-cols-1 sm:grid-cols-2 gap-4 flex-shrink-0"
+                    >
+                        <!-- Score trend card -->
+                        <div
+                            class="rounded-2xl p-5"
+                            style="
+                                background: var(--bg-surface);
+                                border: 1px solid var(--border);
+                                box-shadow: var(--shadow-md);
+                            "
+                        >
+                            <div class="mb-1 flex items-start justify-between gap-2">
+                                <div class="min-w-0">
+                                    <div
+                                        class="text-[11px] font-medium uppercase tracking-wider"
+                                        style="color: var(--text-3)"
+                                    >
+                                        Best Score
+                                    </div>
+                                    <div
+                                        v-if="hasBestScore"
+                                        class="mt-1 text-[2rem] font-bold leading-none tracking-tight tabular-nums"
+                                        style="color: var(--text)"
+                                    >
+                                        {{ stats.bestScore }}
+                                        <span
+                                            class="text-[1rem] font-medium"
+                                            style="color: var(--text-3)"
+                                            >/100</span
+                                        >
+                                    </div>
+                                    <div v-else class="mt-1.5">
+                                        <div
+                                            class="text-[15px] font-semibold leading-tight"
+                                            style="color: var(--text-2)"
+                                        >
+                                            Not scored yet
+                                        </div>
+                                        <div
+                                            class="mt-0.5 text-[10px] leading-snug"
+                                            style="color: var(--text-3)"
+                                        >
+                                            Complete a session to track progress
+                                        </div>
+                                    </div>
+                                </div>
+                                <span
+                                    v-if="stats.scoreImprovement"
+                                    class="flex-shrink-0 rounded px-2 py-0.5 text-[10px] font-semibold"
+                                    style="
+                                        background: var(--green-bg);
+                                        color: var(--green);
+                                    "
+                                    >+{{ stats.scoreImprovement }} this
+                                    month</span
+                                >
+                            </div>
+                            <div
+                                class="text-[11px] mb-3"
+                                style="color: var(--text-3)"
+                            >
+                                Score over last 10 sessions
+                            </div>
+
+                            <!-- Area chart -->
                             <svg
-                                width="36"
-                                height="36"
-                                viewBox="0 0 36 36"
-                                fill="none"
+                                v-if="hasScoreChart"
+                                width="100%"
+                                height="64"
+                                viewBox="0 0 240 64"
+                                preserveAspectRatio="none"
+                                class="block"
                             >
                                 <defs>
                                     <linearGradient
-                                        id="hexGrad"
+                                        id="scoreGrad"
                                         x1="0"
                                         y1="0"
-                                        x2="1"
+                                        x2="0"
                                         y2="1"
                                     >
                                         <stop
                                             offset="0%"
-                                            stop-color="#7c3aed"
+                                            stop-color="var(--accent-2)"
+                                            stop-opacity="0.32"
                                         />
                                         <stop
                                             offset="100%"
-                                            stop-color="#a855f7"
+                                            stop-color="var(--accent)"
+                                            stop-opacity="0"
                                         />
                                     </linearGradient>
                                 </defs>
                                 <path
-                                    d="M18 3 L31 10.5 L31 25.5 L18 33 L5 25.5 L5 10.5 Z"
-                                    fill="url(#hexGrad)"
+                                    :d="areaPath(scoreHistory, 240, 64)"
+                                    fill="url(#scoreGrad)"
                                 />
-                                <polygon
-                                    points="18 10 20.5 14.5 25.5 15.5 22 19 22.5 24 18 21.5 13.5 24 14 19 10.5 15.5 15.5 14.5"
-                                    fill="white"
-                                    opacity="0.95"
-                                />
-                            </svg>
-
-                            <div>
-                                <div
-                                    class="text-[10px] font-semibold uppercase tracking-wider"
-                                    style="color: var(--text-3)"
-                                >
-                                    Current Level
-                                </div>
-                                <div
-                                    class="text-[14px] font-extrabold leading-tight"
-                                    style="color: var(--text)"
-                                >
-                                    {{
-                                        stats.completedSessions >= 20
-                                            ? "Level 4"
-                                            : stats.completedSessions >= 10
-                                              ? "Level 3"
-                                              : stats.completedSessions >= 5
-                                                ? "Level 2"
-                                                : "Level 1"
-                                    }}
-                                </div>
-                                <div
-                                    class="text-[10px]"
-                                    style="color: var(--text-3)"
-                                >
-                                    {{
-                                        stats.completedSessions >= 20
-                                            ? "Advanced Communicator"
-                                            : stats.completedSessions >= 10
-                                              ? "Intermediate Communicator"
-                                              : stats.completedSessions >= 5
-                                                ? "Developing Speaker"
-                                                : "Beginner"
-                                    }}
-                                </div>
-                            </div>
-
-                            <!-- Progress ring -->
-                            <svg width="52" height="52" viewBox="0 0 52 52">
-                                <defs>
-                                    <linearGradient
-                                        id="ringGrad"
-                                        x1="0"
-                                        y1="0"
-                                        x2="1"
-                                        y2="0"
-                                    >
-                                        <stop
-                                            offset="0%"
-                                            stop-color="#7c3aed"
-                                        />
-                                        <stop
-                                            offset="100%"
-                                            stop-color="#a855f7"
-                                        />
-                                    </linearGradient>
-                                </defs>
-                                <circle
-                                    cx="26"
-                                    cy="26"
-                                    r="20"
-                                    fill="none"
-                                    stroke="var(--border-strong)"
-                                    stroke-width="3.5"
-                                />
-                                <circle
-                                    cx="26"
-                                    cy="26"
-                                    r="20"
-                                    fill="none"
-                                    stroke="url(#ringGrad)"
-                                    stroke-width="3.5"
-                                    stroke-linecap="round"
-                                    :stroke-dasharray="2 * Math.PI * 20"
-                                    :stroke-dashoffset="
-                                        2 *
-                                        Math.PI *
-                                        20 *
-                                        (1 -
-                                            Math.min(
-                                                (stats.completedSessions % 10) /
-                                                    10,
-                                                1,
-                                            ))
-                                    "
-                                    transform="rotate(-90 26 26)"
-                                    style="
-                                        transition: stroke-dashoffset 1s ease;
-                                    "
-                                />
-                                <text
-                                    x="26"
-                                    y="30"
-                                    text-anchor="middle"
-                                    font-size="10"
-                                    font-weight="800"
-                                    fill="var(--text)"
-                                >
-                                    {{
-                                        Math.round(
-                                            Math.min(
-                                                (stats.completedSessions % 10) /
-                                                    10,
-                                                1,
-                                            ) * 100,
-                                        )
-                                    }}%
-                                </text>
-                            </svg>
-                        </div>
-                        <div class="text-[10px]" style="color: var(--text-3)">
-                            to next level
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- ── STAT CARDS ──────────────────────────────────── -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                <div
-                    v-for="(card, i) in statCards"
-                    :key="i"
-                    class="card flex flex-col sm:flex-row items-start justify-between gap-3 p-3 sm:p-4"
-                    style="
-                        transition:
-                            box-shadow 250ms ease,
-                            transform 250ms ease;
-                    "
-                    onmouseover="
-                        this.style.transform = 'translateY(-2px)';
-                        this.style.boxShadow = '0 12px 32px rgba(0,0,0,0.1)';
-                    "
-                    onmouseout="
-                        this.style.transform = 'translateY(0)';
-                        this.style.boxShadow = '';
-                    "
-                >
-                    <!-- Left: icon + text -->
-                    <div class="flex items-start gap-3">
-                        <div
-                            class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl"
-                            :style="{ background: card.glow }"
-                        >
-                            <!-- Layers -->
-                            <svg
-                                v-if="card.icon === 'layers'"
-                                width="17"
-                                height="17"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                stroke-width="2"
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                :style="{ color: card.accent }"
-                            >
-                                <polygon points="12 2 2 7 12 12 22 7 12 2" />
-                                <polyline points="2 17 12 22 22 17" />
-                                <polyline points="2 12 12 17 22 12" />
-                            </svg>
-                            <!-- Check -->
-                            <svg
-                                v-else-if="card.icon === 'check-circle'"
-                                width="17"
-                                height="17"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                stroke-width="2"
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                :style="{ color: card.accent }"
-                            >
-                                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                                <polyline points="22 4 12 14.01 9 11.01" />
-                            </svg>
-                            <!-- Star -->
-                            <svg
-                                v-else-if="card.icon === 'star'"
-                                width="17"
-                                height="17"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                stroke-width="2.2"
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                :style="{ color: card.accent }"
-                            >
-                                <polygon
-                                    points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
-                                />
-                            </svg>
-                            <!-- Flame -->
-                            <svg
-                                v-else-if="card.icon === 'flame'"
-                                width="17"
-                                height="17"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                stroke-width="2"
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                :style="{ color: card.accent }"
-                            >
                                 <path
-                                    d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"
-                                />
-                            </svg>
-                        </div>
-                        <div class="min-w-0">
-                            <div
-                                class="text-[1.65rem] font-extrabold leading-none tracking-tight"
-                                :style="{ color: card.accent }"
-                            >
-                                {{ card.value }}
-                            </div>
-                            <div
-                                class="mt-0.5 text-[12px] font-semibold"
-                                style="color: var(--text)"
-                            >
-                                {{ card.label }}
-                            </div>
-                            <div
-                                class="text-[11px] font-medium"
-                                :style="{ color: card.subColor }"
-                            >
-                                {{ card.sub }}
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Right: sparkline -->
-                    <div class="flex-shrink-0 self-center overflow-hidden">
-                        <svg
-                            width="48"
-                            height="24"
-                            viewBox="0 0 64 32"
-                            fill="none"
-                            class="w-full max-w-[64px]"
-                        >
-                            <path
-                                :d="sparklinePath(card.sparkData, 64, 32)"
-                                :stroke="card.sparkColor"
-                                stroke-width="1.8"
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                fill="none"
-                                opacity="0.7"
-                            />
-                        </svg>
-                    </div>
-                </div>
-            </div>
-
-            <!-- ── BOTTOM 3-COLUMN ROW ─────────────────────────── -->
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                <!-- Your Skills -->
-                <div class="card p-4 sm:p-5">
-                    <div class="mb-4 flex items-center justify-between">
-                        <div>
-                            <span
-                                class="text-[13px] font-bold"
-                                style="color: var(--text)"
-                                >Your Skills</span
-                            >
-                            <p class="text-[11px]" style="color: var(--text-3)">
-                                Average across completed sessions
-                            </p>
-                        </div>
-                        <Link
-                            :href="route('conversations.index')"
-                            class="text-[11px] font-semibold transition-opacity hover:opacity-70"
-                            style="color: var(--accent)"
-                        >
-                            View details
-                        </Link>
-                    </div>
-
-                    <div class="space-y-4">
-                        <div v-for="skill in skills" :key="skill.key">
-                            <div
-                                class="mb-1.5 flex items-center justify-between"
-                            >
-                                <div class="flex items-center gap-1.5">
-                                    <!-- skill icon -->
-                                    <div
-                                        class="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md"
-                                        style="
-                                            background: rgba(124, 58, 237, 0.1);
-                                        "
-                                    >
-                                        <svg
-                                            width="11"
-                                            height="11"
-                                            viewBox="0 0 24 24"
-                                            fill="none"
-                                            stroke="#8b5cf6"
-                                            stroke-width="2"
-                                            stroke-linecap="round"
-                                            stroke-linejoin="round"
-                                        >
-                                            <path :d="skill.iconPath" />
-                                        </svg>
-                                    </div>
-                                    <span
-                                        class="text-[12px] font-semibold"
-                                        style="color: var(--text-2)"
-                                    >
-                                        {{ skill.label }}
-                                    </span>
-                                </div>
-                                <div class="flex items-center gap-1.5">
-                                    <span
-                                        class="text-[11px] font-bold"
-                                        style="color: var(--text)"
-                                    >
-                                        {{
-                                            stats.completedSessions === 0
-                                                ? "—"
-                                                : (stats.skillAvgs?.[
-                                                      skill.key
-                                                  ] ?? 0) + "%"
-                                        }}
-                                    </span>
-                                    <span
-                                        v-if="
-                                            stats.completedSessions > 0 &&
-                                            (stats.skillDeltas?.[skill.key] ??
-                                                0) !== 0
-                                        "
-                                        class="text-[10px] font-semibold"
-                                        style="color: #10b981"
-                                    >
-                                        ▲ {{ stats.skillDeltas?.[skill.key] }}%
-                                    </span>
-                                </div>
-                            </div>
-                            <!-- Progress bar — purple gradient matching reference -->
-                            <div
-                                class="h-2 w-full overflow-hidden rounded-full"
-                                style="background: var(--border)"
-                            >
-                                <div
-                                    class="h-full rounded-full transition-all duration-700"
-                                    :style="{
-                                        width:
-                                            stats.completedSessions === 0
-                                                ? '0%'
-                                                : (stats.skillAvgs?.[
-                                                      skill.key
-                                                  ] ?? 0) + '%',
-                                        background: `linear-gradient(90deg, #8b5cf6, #8b5cf6cc)`,
-                                    }"
-                                />
-                            </div>
-                        </div>
-                    </div>
-
-                    <span
-                        v-if="stats.completedSessions === 0"
-                        class="mt-4 inline-block rounded-full px-2.5 py-1 text-[10px] font-semibold"
-                        style="background: var(--amber-bg); color: var(--amber)"
-                    >
-                        Complete a session to unlock
-                    </span>
-                </div>
-
-                <!-- Weekly Activity -->
-                <div class="card p-5">
-                    <div class="mb-4 flex items-center justify-between">
-                        <div>
-                            <span
-                                class="text-[13px] font-bold"
-                                style="color: var(--text)"
-                                >Weekly Activity</span
-                            >
-                            <p class="text-[11px]" style="color: var(--text-3)">
-                                Sessions this week
-                            </p>
-                        </div>
-                        <Link
-                            :href="route('conversations.index')"
-                            class="text-[11px] font-semibold transition-opacity hover:opacity-70"
-                            style="color: var(--accent)"
-                        >
-                            View all →
-                        </Link>
-                    </div>
-
-                    <div
-                        class="flex items-end justify-between gap-1.5"
-                        style="height: clamp(80px, 20vw, 120px)"
-                    >
-                        <div
-                            v-for="(count, idx) in stats.weeklyActivity ?? [
-                                0, 0, 0, 0, 0, 0, 0,
-                            ]"
-                            :key="idx"
-                            class="flex flex-1 flex-col items-center justify-end gap-1.5"
-                        >
-                            <div
-                                class="relative w-full transition-all duration-700"
-                                :style="{
-                                    height:
-                                        count > 0
-                                            ? Math.max(
-                                                  14,
-                                                  Math.round(
-                                                      (count / maxActivity) *
-                                                          88,
-                                                  ),
-                                              ) + 'px'
-                                            : '6px',
-                                    background:
-                                        idx === todayIdx
-                                            ? 'linear-gradient(180deg, #7c3aed, #a855f7)'
-                                            : count > 0
-                                              ? 'rgba(124,58,237,0.25)'
-                                              : 'var(--border)',
-                                    borderRadius: '5px 5px 3px 3px',
-                                    boxShadow:
-                                        idx === todayIdx && count > 0
-                                            ? '0 4px 12px rgba(124,58,237,0.35)'
-                                            : 'none',
-                                }"
-                            >
-                                <div
-                                    v-if="count > 0"
-                                    class="absolute inset-x-0 -top-4 text-center text-[9px] font-bold"
-                                    :style="{
-                                        color:
-                                            idx === todayIdx
-                                                ? 'var(--accent)'
-                                                : 'var(--text-2)',
-                                    }"
-                                >
-                                    {{ count }}
-                                </div>
-                            </div>
-                            <span
-                                class="text-[10px] font-semibold"
-                                :style="
-                                    idx === todayIdx
-                                        ? 'color: var(--accent)'
-                                        : 'color: var(--text-3)'
-                                "
-                            >
-                                {{ weekDays[idx].slice(0, 3) }}
-                            </span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Recent Sessions -->
-                <div class="card overflow-hidden">
-                    <div
-                        class="flex items-center justify-between border-b px-5 py-4"
-                        style="border-color: var(--border)"
-                    >
-                        <span
-                            class="text-[13px] font-bold"
-                            style="color: var(--text)"
-                            >Recent Sessions</span
-                        >
-                        <Link
-                            :href="route('conversations.index')"
-                            class="text-[11px] font-semibold transition-opacity hover:opacity-70"
-                            style="color: var(--accent)"
-                        >
-                            View all
-                        </Link>
-                    </div>
-
-                    <!-- Empty state -->
-                    <div
-                        v-if="recentSessions.length === 0"
-                        class="flex flex-col items-center py-10 text-center px-5"
-                    >
-                        <div
-                            class="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl"
-                            style="background: var(--accent-bg)"
-                        >
-                            <svg
-                                width="18"
-                                height="18"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                stroke-width="1.8"
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                style="color: var(--text-3)"
-                            >
-                                <path
-                                    d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
-                                />
-                            </svg>
-                        </div>
-                        <p
-                            class="text-[13px] font-semibold"
-                            style="color: var(--text-2)"
-                        >
-                            No sessions yet
-                        </p>
-                        <p
-                            class="mt-1 text-[11px]"
-                            style="color: var(--text-3)"
-                        >
-                            Pick a scenario to start.
-                        </p>
-                        <Link
-                            :href="route('scenarios.index')"
-                            class="mt-3 rounded-xl px-4 py-2 text-xs font-semibold text-white"
-                            style="
-                                background: var(--gradient-accent);
-                                box-shadow: var(--shadow-btn);
-                            "
-                            onmouseover="
-                                this.style.opacity = '0.9';
-                                this.style.transform = 'translateY(-1px)';
-                            "
-                            onmouseout="
-                                this.style.opacity = '1';
-                                this.style.transform = 'translateY(0)';
-                            "
-                        >
-                            Browse Scenarios
-                        </Link>
-                    </div>
-
-                    <!-- Session rows -->
-                    <div v-else>
-                        <Link
-                            v-for="session in recentSessions.slice(0, 4)"
-                            :key="session.id"
-                            :href="route('conversations.show', session.id)"
-                            class="flex items-center gap-3 border-b px-5 py-3 transition-colors last:border-b-0"
-                            style="border-color: var(--border)"
-                            onmouseover="
-                                this.style.background = 'var(--accent-bg)'
-                            "
-                            onmouseout="this.style.background = 'transparent'"
-                        >
-                            <!-- Scenario icon -->
-                            <div
-                                class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl"
-                                :style="{
-                                    background: scenarioAccent(session.scenario)
-                                        .bg,
-                                }"
-                            >
-                                <svg
-                                    width="13"
-                                    height="13"
-                                    viewBox="0 0 24 24"
+                                    :d="linePath(scoreHistory, 240, 64)"
                                     fill="none"
-                                    stroke="currentColor"
+                                    stroke="var(--accent)"
                                     stroke-width="2"
                                     stroke-linecap="round"
                                     stroke-linejoin="round"
-                                    :style="{
-                                        color: scenarioAccent(session.scenario)
-                                            .color,
-                                    }"
+                                />
+                                <circle
+                                    :cx="sparkEndpoint.x"
+                                    :cy="sparkEndpoint.y"
+                                    r="3.5"
+                                    fill="var(--bg-surface)"
+                                    stroke="var(--accent)"
+                                    stroke-width="2"
+                                />
+                            </svg>
+                            <div
+                                v-else
+                                class="flex h-16 flex-col items-center justify-center gap-2 rounded-lg px-3"
+                                style="background: var(--bg-surface2)"
+                            >
+                                <div
+                                    class="flex h-8 w-full items-end justify-between gap-1 px-1"
                                 >
-                                    <path
-                                        d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
+                                    <span
+                                        v-for="n in 6"
+                                        :key="n"
+                                        class="flex-1 rounded-sm"
+                                        :style="{
+                                            height: `${20 + n * 6}%`,
+                                            background: 'var(--track-bg)',
+                                        }"
                                     />
+                                </div>
+                                <span
+                                    class="text-[10px] leading-snug text-center"
+                                    style="color: var(--text-3)"
+                                >
+                                    Your score trend will appear here
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Weekly activity card -->
+                        <div
+                            class="rounded-2xl p-5"
+                            style="
+                                background: var(--bg-surface);
+                                border: 1px solid var(--border);
+                                box-shadow: var(--shadow-md);
+                            "
+                        >
+                            <div class="flex items-start justify-between mb-1">
+                                <div>
+                                    <div
+                                        class="text-[11px] font-medium uppercase tracking-wider"
+                                        style="color: var(--text-3)"
+                                    >
+                                        This Week
+                                    </div>
+                                    <div
+                                        class="text-[2rem] font-bold leading-none tracking-tight tabular-nums mt-1"
+                                        style="color: var(--text)"
+                                    >
+                                        {{
+                                            activityHistory.reduce(
+                                                (a, b) => a + b,
+                                                0,
+                                            )
+                                        }}
+                                        <span
+                                            class="text-[1rem] font-medium"
+                                            style="color: var(--text-3)"
+                                            >sessions</span
+                                        >
+                                    </div>
+                                </div>
+                                <span
+                                    class="text-[10px] font-semibold px-2 py-0.5 rounded"
+                                    style="
+                                        background: var(--accent-bg);
+                                        color: var(--accent);
+                                    "
+                                >
+                                    {{ stats.completedThisWeek ?? 0 }} completed
+                                </span>
+                            </div>
+                            <div
+                                class="text-[11px] mb-3"
+                                style="color: var(--text-3)"
+                            >
+                                Daily sessions Sun – Sat
+                            </div>
+
+                            <!-- 7-column dot matrix -->
+                            <div
+                                class="flex items-stretch justify-between gap-1.5"
+                                style="height: 64px"
+                            >
+                                <div
+                                    v-for="(count, idx) in activityHistory"
+                                    :key="idx"
+                                    class="flex flex-1 flex-col items-center"
+                                >
+                                    <!-- 7 stacked dots, evenly spaced to fill the column -->
+                                    <div
+                                        class="flex flex-1 w-full flex-col-reverse items-center justify-between py-0.5"
+                                    >
+                                        <span
+                                            v-for="row in DOT_ROWS"
+                                            :key="row"
+                                            class="rounded-[2.5px] transition-colors duration-300"
+                                            style="width: 8px; height: 6px"
+                                            :style="{
+                                                background:
+                                                    row <= filledDots(count)
+                                                        ? idx === todayIdx
+                                                            ? 'var(--accent)'
+                                                            : 'var(--accent-2)'
+                                                        : 'var(--track-bg)',
+                                                opacity:
+                                                    row <= filledDots(count)
+                                                        ? idx === todayIdx
+                                                            ? 1
+                                                            : 0.55
+                                                        : 1,
+                                            }"
+                                        />
+                                    </div>
+                                    <!-- Day label, centered under its column -->
+                                    <span
+                                        class="mt-1.5 w-full text-center text-[9px] font-semibold leading-none"
+                                        :style="
+                                            idx === todayIdx
+                                                ? 'color:var(--accent)'
+                                                : 'color:var(--text-3)'
+                                        "
+                                    >
+                                        {{ weekDays[idx][0] }}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- YOUR SKILLS CARD — grows to fill left column on desktop -->
+                    <div
+                        class="flex flex-shrink-0 flex-col rounded-2xl p-5 lg:min-h-0 lg:flex-1 lg:overflow-hidden"
+                        style="
+                            background: var(--bg-surface);
+                            border: 1px solid var(--border);
+                            box-shadow: var(--shadow-md);
+                        "
+                    >
+                        <div
+                            class="mb-4 flex flex-shrink-0 items-center justify-between"
+                        >
+                            <div>
+                                <div
+                                    class="text-[13px] font-semibold"
+                                    style="color: var(--text)"
+                                >
+                                    Your Skills
+                                </div>
+                                <div
+                                    class="text-[11px]"
+                                    style="color: var(--text-3)"
+                                >
+                                    Average across completed sessions
+                                </div>
+                            </div>
+                            <Link
+                                :href="route('conversations.index')"
+                                class="text-[11px] font-medium hover:opacity-70 transition-opacity"
+                                style="color: var(--accent)"
+                            >
+                                View details
+                            </Link>
+                        </div>
+
+                        <div
+                            class="flex flex-col items-center gap-4 sm:flex-row sm:items-stretch sm:gap-5 lg:min-h-0 lg:flex-1"
+                        >
+                            <!-- Radar chart -->
+                            <div
+                                class="flex w-full max-w-[220px] flex-shrink-0 items-center sm:w-[200px] lg:w-[180px]"
+                            >
+                                <svg
+                                    viewBox="0 0 200 200"
+                                    class="h-auto w-full"
+                                    aria-label="Skills radar chart"
+                                >
+                                    <defs>
+                                        <linearGradient
+                                            id="radarFill"
+                                            x1="0%"
+                                            y1="0%"
+                                            x2="100%"
+                                            y2="100%"
+                                        >
+                                            <stop
+                                                offset="0%"
+                                                stop-color="var(--accent)"
+                                                stop-opacity="0.35"
+                                            />
+                                            <stop
+                                                offset="100%"
+                                                stop-color="var(--accent-2)"
+                                                stop-opacity="0.15"
+                                            />
+                                        </linearGradient>
+                                    </defs>
+
+                                    <g
+                                        v-for="ring in radarGridRings"
+                                        :key="ring"
+                                    >
+                                        <polygon
+                                            :points="
+                                                RADAR_ANGLES.map((a) => {
+                                                    const p = radarPoint(
+                                                        ring,
+                                                        a,
+                                                        RADAR_CX,
+                                                        RADAR_CY,
+                                                        RADAR_MAX_R,
+                                                    );
+                                                    return `${p.x},${p.y}`;
+                                                }).join(' ')
+                                            "
+                                            fill="none"
+                                            stroke="var(--track-bg)"
+                                            stroke-width="1"
+                                        />
+                                    </g>
+
+                                    <line
+                                        v-for="skill in radarSkills"
+                                        :key="`axis-${skill.key}`"
+                                        :x1="RADAR_CX"
+                                        :y1="RADAR_CY"
+                                        :x2="skill.axis.x"
+                                        :y2="skill.axis.y"
+                                        stroke="var(--border)"
+                                        stroke-width="1"
+                                    />
+
+                                    <polygon
+                                        v-if="
+                                            radarSkills.some((s) => !s.isPending)
+                                        "
+                                        :points="radarPolygon"
+                                        fill="url(#radarFill)"
+                                        stroke="var(--accent)"
+                                        stroke-width="2"
+                                        stroke-linejoin="round"
+                                    />
+
+                                    <circle
+                                        v-for="skill in radarSkills"
+                                        :key="`dot-${skill.key}`"
+                                        v-show="!skill.isPending"
+                                        :cx="skill.point.x"
+                                        :cy="skill.point.y"
+                                        r="3.5"
+                                        fill="var(--bg-surface)"
+                                        stroke="var(--accent)"
+                                        stroke-width="2"
+                                    />
+
+                                    <text
+                                        v-for="skill in radarSkills"
+                                        :key="`label-${skill.key}`"
+                                        :x="skill.labelPos.x"
+                                        :y="skill.labelPos.y"
+                                        text-anchor="middle"
+                                        dominant-baseline="middle"
+                                        class="text-[9px] font-semibold"
+                                        fill="var(--text-2)"
+                                    >
+                                        {{
+                                            skillAxisLabel(skill.key)
+                                        }}
+                                    </text>
                                 </svg>
                             </div>
 
-                            <!-- Info -->
-                            <div class="min-w-0 flex-1">
+                            <!-- Skill legend -->
+                            <div
+                                class="grid w-full min-w-0 flex-1 grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-rows-2 lg:content-stretch"
+                            >
                                 <div
-                                    class="truncate text-[12px] font-semibold"
+                                    v-for="skill in skillsWithMeta"
+                                    :key="skill.key"
+                                    class="flex items-center gap-3 rounded-xl px-3 py-2.5 lg:h-full"
+                                    style="
+                                        background: var(--bg-surface2);
+                                        border: 1px solid var(--border);
+                                    "
+                                >
+                                    <div
+                                        class="h-8 w-1 flex-shrink-0 rounded-full"
+                                        :style="{
+                                            background: skill.isPending
+                                                ? 'var(--track-bg)'
+                                                : 'var(--gradient-primary)',
+                                        }"
+                                    />
+                                    <div class="min-w-0 flex-1">
+                                        <div
+                                            class="text-[11px] font-medium leading-tight"
+                                            style="color: var(--text-2)"
+                                        >
+                                            {{ skill.label }}
+                                        </div>
+                                        <div class="mt-0.5 flex items-center gap-1.5">
+                                            <span
+                                                class="text-[13px] font-bold tabular-nums leading-none"
+                                                :style="
+                                                    skill.isPending
+                                                        ? 'color: var(--text-3)'
+                                                        : 'color: var(--text)'
+                                                "
+                                            >
+                                                {{
+                                                    skill.isPending
+                                                        ? "—"
+                                                        : `${skill.value}%`
+                                                }}
+                                            </span>
+                                            <span
+                                                v-if="skill.isPending"
+                                                class="text-[10px] leading-tight"
+                                                style="color: var(--text-3)"
+                                            >
+                                                Pending
+                                            </span>
+                                            <span
+                                                v-else-if="skill.delta !== 0"
+                                                class="rounded px-1.5 py-0.5 text-[10px] font-semibold"
+                                                style="
+                                                    background: var(--green-bg);
+                                                    color: var(--green);
+                                                "
+                                            >
+                                                +{{ skill.delta }}%
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- end LEFT COLUMN -->
+
+                <!-- ── RIGHT COLUMN ─────────────────────────────── -->
+                <div
+                    class="flex min-w-0 flex-1 flex-col gap-5 lg:h-full lg:min-h-0 lg:overflow-hidden"
+                >
+                    <!-- RECENT SESSIONS -->
+                    <div
+                        class="flex flex-shrink-0 flex-col overflow-hidden rounded-2xl lg:min-h-0 lg:flex-1"
+                        style="
+                            background: var(--bg-surface);
+                            border: 1px solid var(--border);
+                            box-shadow: var(--shadow-md);
+                        "
+                    >
+                        <!-- Header (fixed, doesn't scroll) -->
+                        <div
+                            class="flex items-center justify-between px-5 py-4 border-b flex-shrink-0"
+                            style="border-color: var(--border)"
+                        >
+                            <div>
+                                <div
+                                    class="text-[13px] font-semibold"
                                     style="color: var(--text)"
                                 >
-                                    {{ session.scenario?.title ?? "Session" }}
+                                    Recent Sessions
+                                </div>
+                                <div
+                                    class="text-[11px]"
+                                    style="color: var(--text-3)"
+                                >
+                                    Latest practice activity
+                                </div>
+                            </div>
+                            <Link
+                                :href="route('conversations.index')"
+                                class="text-[11px] font-medium hover:opacity-70 transition-opacity"
+                                style="color: var(--accent)"
+                                >View all</Link
+                            >
+                        </div>
+
+                        <!-- Session list -->
+                        <div
+                            class="min-h-0 flex-1 overflow-y-auto lg:flex lg:flex-col"
+                        >
+                            <!-- Empty state -->
+                            <div
+                                v-if="recentSessions.length === 0"
+                                class="flex h-full min-h-[12rem] flex-col justify-between px-5 py-5"
+                            >
+                                <div>
+                                    <div class="mb-4 text-center">
+                                        <div
+                                            class="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-xl"
+                                            style="background: var(--accent-bg)"
+                                        >
+                                            <svg
+                                                width="18"
+                                                height="18"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="var(--accent)"
+                                                stroke-width="2"
+                                                stroke-linecap="round"
+                                                stroke-linejoin="round"
+                                            >
+                                                <path
+                                                    d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
+                                                />
+                                            </svg>
+                                        </div>
+                                        <p
+                                            class="text-[13px] font-medium"
+                                            style="color: var(--text-2)"
+                                        >
+                                            No sessions yet
+                                        </p>
+                                        <p
+                                            class="mt-1 text-[11px]"
+                                            style="color: var(--text-3)"
+                                        >
+                                            Your practice history will appear
+                                            here.
+                                        </p>
+                                    </div>
+
+                                    <div class="flex flex-col gap-2.5">
+                                        <div
+                                            v-for="(row, i) in [
+                                                { title: '64%', sub: '34%' },
+                                                { title: '50%', sub: '28%' },
+                                                { title: '38%', sub: '22%' },
+                                            ]"
+                                            :key="i"
+                                            class="flex items-center gap-3 rounded-xl border border-dashed px-3 py-3"
+                                            :style="{
+                                                borderColor:
+                                                    'var(--border-strong)',
+                                                opacity: 1 - i * 0.22,
+                                            }"
+                                        >
+                                            <div
+                                                class="h-7 w-7 flex-shrink-0 rounded-lg"
+                                                style="
+                                                    background: var(--track-bg);
+                                                "
+                                            />
+                                            <div
+                                                class="flex min-w-0 flex-1 flex-col gap-1.5"
+                                            >
+                                                <div
+                                                    class="h-2 rounded-full"
+                                                    :style="{
+                                                        background:
+                                                            'var(--track-bg)',
+                                                        width: row.title,
+                                                    }"
+                                                />
+                                                <div
+                                                    class="h-2 rounded-full"
+                                                    :style="{
+                                                        background:
+                                                            'var(--track-bg)',
+                                                        width: row.sub,
+                                                    }"
+                                                />
+                                            </div>
+                                            <div
+                                                class="h-5 w-12 flex-shrink-0 rounded-md"
+                                                style="
+                                                    background: var(--track-bg);
+                                                "
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <Link
+                                    :href="route('scenarios.index')"
+                                    class="btn-primary mt-4 self-center text-[11px] px-4 py-2 lg:mt-0"
+                                    >Browse Scenarios</Link
+                                >
+                            </div>
+
+                            <!-- Session rows - scrollable -->
+                            <div v-else>
+                                <Link
+                                    v-for="session in recentSessions.slice(
+                                        0,
+                                        8,
+                                    )"
+                                    :key="session.id"
+                                    :href="
+                                        route('conversations.show', session.id)
+                                    "
+                                    class="flex items-center gap-3 px-5 py-3 border-b last:border-b-0 hover:bg-[var(--bg-surface2)] transition-colors"
+                                    style="border-color: var(--border)"
+                                >
+                                    <div
+                                        class="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg"
+                                        style="background: var(--accent-bg)"
+                                    >
+                                        <svg
+                                            width="12"
+                                            height="12"
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            stroke-width="2"
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            style="color: var(--accent)"
+                                        >
+                                            <path
+                                                d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
+                                            />
+                                        </svg>
+                                    </div>
+
+                                    <div class="min-w-0 flex-1">
+                                        <div
+                                            class="truncate text-[12px] font-medium"
+                                            style="color: var(--text)"
+                                        >
+                                            {{
+                                                session.scenario?.title ??
+                                                "Session"
+                                            }}
+                                        </div>
+                                        <div
+                                            class="text-[10px]"
+                                            style="color: var(--text-3)"
+                                        >
+                                            {{ formatDate(session.created_at) }}
+                                        </div>
+                                    </div>
+
+                                    <div
+                                        class="flex flex-shrink-0 items-center gap-1.5"
+                                    >
+                                        <span
+                                            v-if="session.score !== null"
+                                            class="rounded px-1.5 py-0.5 text-[10px] font-semibold tabular-nums"
+                                            :style="{
+                                                color: scoreColor(session.score)
+                                                    .text,
+                                                background: scoreColor(
+                                                    session.score,
+                                                ).bg,
+                                            }"
+                                        >
+                                            {{ session.score }}/100
+                                        </span>
+                                        <span
+                                            class="rounded px-2 py-1 text-[10px] font-medium border"
+                                            :style="
+                                                session.is_completed
+                                                    ? 'color: var(--text-2); border-color: var(--border-strong); background: transparent;'
+                                                    : 'color: var(--accent); border-color: var(--accent); background: var(--accent-bg);'
+                                            "
+                                        >
+                                            {{
+                                                session.is_completed
+                                                    ? "Review"
+                                                    : "Resume"
+                                            }}
+                                        </span>
+                                    </div>
+                                </Link>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- STREAK + STAT -->
+                    <div
+                        class="flex-shrink-0 rounded-2xl p-5"
+                        style="
+                            background: var(--bg-surface);
+                            border: 1px solid var(--border);
+                            box-shadow: var(--shadow-md);
+                        "
+                    >
+                        <div
+                            class="grid grid-cols-3 divide-x"
+                            style="--tw-divide-opacity: 1"
+                        >
+                            <div class="pr-4">
+                                <div
+                                    class="text-[10px] font-medium uppercase tracking-wider mb-1"
+                                    style="color: var(--text-3)"
+                                >
+                                    Streak
+                                </div>
+                                <div
+                                    class="text-[1.4rem] font-bold tabular-nums"
+                                    style="color: var(--text)"
+                                >
+                                    {{ stats.currentStreak }}
+                                    <span
+                                        class="text-[11px] font-normal"
+                                        style="color: var(--text-3)"
+                                        >days</span
+                                    >
                                 </div>
                                 <div
                                     class="text-[10px]"
                                     style="color: var(--text-3)"
                                 >
-                                    {{ formatDate(session.created_at) }}
+                                    Best:
+                                    {{
+                                        stats.bestStreak ?? stats.currentStreak
+                                    }}d
                                 </div>
                             </div>
 
-                            <!-- Score + Review -->
-                            <div
-                                class="flex flex-shrink-0 items-center gap-1.5"
-                            >
-                                <span
-                                    v-if="session.score !== null"
-                                    class="rounded-lg px-1.5 py-0.5 text-[10px] font-bold"
-                                    :style="{
-                                        color: scoreColor(session.score).text,
-                                        background: scoreColor(session.score)
-                                            .bg,
-                                    }"
+                            <div class="px-4">
+                                <div
+                                    class="text-[10px] font-medium uppercase tracking-wider mb-1"
+                                    style="color: var(--text-3)"
                                 >
-                                    {{ session.score }}/100
-                                </span>
-                                <span
-                                    class="rounded-lg px-2 py-1 text-[10px] font-semibold"
-                                    :style="
-                                        session.is_completed
-                                            ? 'background: var(--accent-bg); color: var(--accent)'
-                                            : 'background: linear-gradient(135deg, #7c3aed, #a855f7); color: white'
-                                    "
+                                    Total
+                                </div>
+                                <div
+                                    class="text-[1.4rem] font-bold tabular-nums"
+                                    style="color: var(--text)"
                                 >
-                                    {{
-                                        session.is_completed
-                                            ? "Review"
-                                            : "Resume"
-                                    }}
-                                </span>
+                                    {{ stats.totalSessions }}
+                                    <span
+                                        class="text-[11px] font-normal"
+                                        style="color: var(--text-3)"
+                                        >sessions</span
+                                    >
+                                </div>
+                                <div
+                                    class="text-[10px]"
+                                    style="color: var(--text-3)"
+                                >
+                                    +{{ stats.thisWeek ?? 0 }} this week
+                                </div>
                             </div>
-                        </Link>
+
+                            <div class="pl-4">
+                                <div
+                                    class="text-[10px] font-medium uppercase tracking-wider mb-1"
+                                    style="color: var(--text-3)"
+                                >
+                                    Done
+                                </div>
+                                <div
+                                    class="text-[1.4rem] font-bold tabular-nums"
+                                    style="color: var(--text)"
+                                >
+                                    {{ stats.completedSessions }}
+                                    <span
+                                        class="text-[11px] font-normal"
+                                        style="color: var(--text-3)"
+                                        >completed</span
+                                    >
+                                </div>
+                                <div
+                                    class="text-[10px]"
+                                    style="color: var(--text-3)"
+                                >
+                                    +{{ stats.completedThisWeek ?? 0 }} this
+                                    week
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
