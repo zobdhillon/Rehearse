@@ -4,8 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\Conversation;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 
 class ConversationController extends Controller
@@ -55,42 +58,65 @@ class ConversationController extends Controller
             "- If you are an HR manager, speak like one in a real meeting — direct and professional.\n" .
             "- Always respond to what the user just said. Never ignore their last message.";
 
-
         $formattedMessages[] = [
-            'role' => 'system',
+            'role'    => 'system',
             'content' => $strongSystemInstruction,
         ];
 
         $formattedMessages[] = [
-            'role' => 'user',
+            'role'    => 'user',
             'content' => "Begin the simulation now. Speak your opening line in character. Maximum 2 sentences. No commentary, just dialogue."
         ];
+
+        $startTime = microtime(true);
 
         try {
             $response = Http::timeout(30)
                 ->withHeaders([
-                    'Authorization' => 'Bearer ' . env('GROQ_API_KEY'),
-                    'Content-Type' => 'application/json',
+                    'Authorization' => 'Bearer ' . config('services.groq.key'),
+                    'Content-Type'  => 'application/json',
                 ])
                 ->post('https://api.groq.com/openai/v1/chat/completions', [
-                    'model' => env('GROQ_MODEL'),
-                    'messages' => $formattedMessages,
+                    'model'       => config('services.groq.model'),
+                    'messages'    => $formattedMessages,
                     'temperature' => 0.4,
-                    'max_tokens' => 150,
+                    'max_tokens'  => 150,
                 ]);
+
+            $latency = round((microtime(true) - $startTime) * 1000);
 
             if ($response->successful()) {
                 $aiContent = $response->json('choices.0.message.content');
 
                 $conversation->messages()->create([
-                    'role' => 'assistant',
+                    'role'    => 'assistant',
                     'content' => $aiContent,
+                ]);
+
+                Cache::forget("dashboard." . auth()->id());
+
+                Log::channel('ai')->info('Opening message generated', [
+                    'conversation_id' => $conversation->id,
+                    'scenario_id'     => $conversation->scenario_id,
+                    'latency_ms'      => $latency,
+                    'response_length' => strlen($aiContent),
+                ]);
+            } else {
+                Log::channel('ai')->error('Opening message API non-200', [
+                    'conversation_id' => $conversation->id,
+                    'scenario_id'     => $conversation->scenario_id,
+                    'status'          => $response->status(),
+                    'latency_ms'      => $latency,
                 ]);
             }
         } catch (\Exception $e) {
-            $conversation->messages()->create([
-                'role' => 'assistant',
-                'content' => '🤖 [Coach Connection Error] Connection lost.',
+            $latency = round((microtime(true) - $startTime) * 1000);
+
+            Log::channel('ai')->error('Opening message API exception', [
+                'conversation_id' => $conversation->id,
+                'scenario_id'     => $conversation->scenario_id,
+                'latency_ms'      => $latency,
+                'error'           => $e->getMessage(),
             ]);
         }
 
@@ -102,6 +128,7 @@ class ConversationController extends Controller
         if ($conversation->user_id !== auth()->id()) {
             abort(403);
         }
+
         return Inertia::render('Conversations/Show', [
             'conversation' => $conversation->load(['messages', 'scenario']),
         ]);
@@ -112,6 +139,7 @@ class ConversationController extends Controller
         if ($conversation->user_id !== auth()->id()) {
             abort(403);
         }
+
         if ($conversation->status === 'completed') {
             return redirect()->route('conversations.show', $conversation->id);
         }
@@ -135,6 +163,8 @@ class ConversationController extends Controller
             "CRITICAL: Return ONLY a valid JSON object, no extra text, no markdown, no backticks:\n" .
             '{"final":85,"clarity":90,"confidence":80,"objective":85,"adaptability":85,"feedback":"Your feedback here."}';
 
+        $startTime = microtime(true);
+
         try {
             $response = Http::timeout(30)
                 ->withHeaders([
@@ -142,41 +172,95 @@ class ConversationController extends Controller
                     'Content-Type'  => 'application/json',
                 ])
                 ->post('https://api.groq.com/openai/v1/chat/completions', [
-                    'model' => config('services.groq.model'),
-                    'messages'    => [
-                        [
-                            'role'    => 'user',
-                            'content' => $scoringPrompt,
-                        ]
-                    ],
+                    'model'       => config('services.groq.model'),
+                    'messages'    => [['role' => 'user', 'content' => $scoringPrompt]],
                     'temperature' => 0.1,
                     'max_tokens'  => 300,
                 ]);
 
-            if ($response->successful()) {
-                $raw = $response->json('choices.0.message.content');
+            $latency = round((microtime(true) - $startTime) * 1000);
 
-                $clean = preg_replace('/```json|```/', '', $raw);
+            if ($response->successful()) {
+                $raw    = $response->json('choices.0.message.content');
+                $clean  = preg_replace('/```json|```/', '', $raw);
                 $scores = json_decode(trim($clean), true);
 
+                $validScores = $scores && isset($scores['final']);
+
+                Log::channel('ai')->info('Scoring completed', [
+                    'conversation_id' => $conversation->id,
+                    'latency_ms'      => $latency,
+                    'scores_valid'    => $validScores,
+                    'final_score'     => $scores['final'] ?? null,
+                ]);
+
                 $conversation->update([
-                    'scores' => ($scores && isset($scores['final'])) ? $scores : [
-                        'clarity'      => 50,
-                        'confidence'   => 50,
-                        'objective'    => 50,
-                        'adaptability' => 50,
-                        'final'        => 50,
-                        'feedback'     => 'Session completed. Unable to generate detailed feedback this time.',
-                    ],
+                    'scores' => $validScores ? $scores : $this->fallbackScores(),
+                    'status' => 'completed',
+                ]);
+            } else {
+                Log::channel('ai')->error('Scoring API non-200', [
+                    'conversation_id' => $conversation->id,
+                    'status'          => $response->status(),
+                    'latency_ms'      => $latency,
+                ]);
+
+                $conversation->update([
+                    'scores' => $this->fallbackScores(),
                     'status' => 'completed',
                 ]);
             }
+
+            Cache::forget("dashboard." . $conversation->user_id);
         } catch (\Exception $e) {
+            $latency = round((microtime(true) - $startTime) * 1000);
+
+            Log::channel('ai')->error('Scoring API exception', [
+                'conversation_id' => $conversation->id,
+                'latency_ms'      => $latency,
+                'error'           => $e->getMessage(),
+            ]);
+
             $conversation->update([
+                'scores' => $this->fallbackScores(),
                 'status' => 'completed',
             ]);
+
+            Cache::forget("dashboard." . $conversation->user_id);
         }
 
         return redirect()->route('conversations.show', $conversation->id);
+    }
+
+    public function export(Conversation $conversation)
+    {
+        if ($conversation->user_id !== auth()->id()) {
+            abort(403);
+        }
+
+        $conversation->load(['scenario', 'messages']);
+
+        $pdf = Pdf::loadView('pdf.transcript', [
+            'conversation' => $conversation,
+            'scenario'     => $conversation->scenario,
+            'messages'     => $conversation->messages,
+            'scores'       => $conversation->scores,
+        ]);
+
+        $filename = 'transcript-' . str($conversation->scenario->title)->slug() . '-' . $conversation->id . '.pdf';
+
+        return $pdf->download($filename);
+    }
+
+    private function fallbackScores(): array
+    {
+        return [
+            'clarity'      => 50,
+            'confidence'   => 50,
+            'objective'    => 50,
+            'adaptability' => 50,
+            'final'        => 50,
+            'feedback'     => 'Session completed. Unable to generate detailed feedback this time.',
+        ];
     }
 }

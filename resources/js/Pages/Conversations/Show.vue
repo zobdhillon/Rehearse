@@ -1,7 +1,7 @@
 <script setup>
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout.vue";
 import { Head, Link, router } from "@inertiajs/vue3";
-import { ref, watch, nextTick, onMounted } from "vue";
+import { ref, watch, computed, nextTick, onMounted } from "vue";
 
 const props = defineProps({
     conversation: Object,
@@ -11,9 +11,17 @@ const localMessages = ref([...props.conversation.messages]);
 const messagesEl = ref(null);
 const messageText = ref("");
 const processing = ref(false);
+const isSending = ref(false);
+const isStarting = ref(false);
+const errorMessage = ref(null);
+const lastAttemptedMessage = ref("");
 
 const isCompleted = ref(props.conversation.status === "completed");
 const scores = ref(props.conversation.scores);
+
+const userMessageCount = computed(
+    () => localMessages.value.filter((m) => m.role === "user").length,
+);
 
 watch(
     () => props.conversation.status,
@@ -126,18 +134,22 @@ onMounted(() => nextTick(scrollToBottom));
 const isUser = (role) => role === "user";
 
 const sendMessage = () => {
-    if (!messageText.value.trim() || processing.value) return;
+    if (!messageText.value.trim() || isSending.value) return;
+
+    errorMessage.value = null;
+    const payload = messageText.value;
+    lastAttemptedMessage.value = payload;
 
     // Optimistically push the user message immediately
-    localMessages.value.push({
+    const tempMsg = {
         id: Date.now(),
         role: "user",
-        content: messageText.value,
-    });
+        content: payload,
+    };
+    localMessages.value.push(tempMsg);
 
-    const payload = messageText.value;
     messageText.value = "";
-    processing.value = true;
+    isSending.value = true;
 
     axios
         .post(`/conversations/${props.conversation.id}/messages`, {
@@ -151,12 +163,59 @@ const sendMessage = () => {
                 localMessages.value.push(response.data.message);
             }
         })
-        .catch(() => {
-            messageText.value = payload;
+        .catch((error) => {
+            localMessages.value = localMessages.value.filter(
+                (m) => m.id !== tempMsg.id,
+            );
+            let msg = "Something went wrong. Please try again.";
+            if (
+                error.response &&
+                error.response.data &&
+                error.response.data.message
+            ) {
+                msg = error.response.data.message;
+            } else if (error.message) {
+                msg = error.message;
+            }
+            errorMessage.value = msg;
         })
         .finally(() => {
-            processing.value = false;
+            isSending.value = false;
         });
+};
+
+const retrySendMessage = () => {
+    if (!lastAttemptedMessage.value) return;
+    messageText.value = lastAttemptedMessage.value;
+    sendMessage();
+};
+
+const startNewSession = () => {
+    router.post(
+        "/conversations",
+        { scenario_id: props.conversation.scenario_id },
+        {
+            onStart: () => {
+                isStarting.value = true;
+                errorMessage.value = null;
+            },
+            onFinish: () => {
+                isStarting.value = false;
+            },
+        },
+    );
+};
+
+const copiedId = ref(null);
+
+const copyMessage = async (msg) => {
+    try {
+        await navigator.clipboard.writeText(msg.content);
+        copiedId.value = msg.id;
+        setTimeout(() => (copiedId.value = null), 2000);
+    } catch (e) {
+        // clipboard not available
+    }
 };
 </script>
 
@@ -166,7 +225,10 @@ const sendMessage = () => {
     <AuthenticatedLayout>
         <template #title>{{ conversation.scenario.title }}</template>
 
-        <div class="flex h-full flex-col overflow-hidden px-5 pb-5 pt-4">
+        <div
+            class="flex flex-col overflow-hidden px-5 pb-5 pt-4"
+            style="height: calc(100vh - 56px)"
+        >
             <div class="card flex min-h-0 flex-1 flex-col overflow-hidden">
                 <!-- Chat header -->
                 <header
@@ -217,18 +279,6 @@ const sendMessage = () => {
                             >
                                 End Session
                             </button>
-
-                            <!-- Session badge -->
-                            <span
-                                class="rounded-full border px-3 py-1 text-[11px] font-semibold"
-                                style="
-                                    background: var(--accent-bg);
-                                    color: var(--accent);
-                                    border-color: rgba(124, 58, 237, 0.2);
-                                "
-                            >
-                                Session #{{ conversation.id }}
-                            </span>
                         </div>
                     </div>
                 </header>
@@ -330,11 +380,7 @@ const sendMessage = () => {
                                         :style="{
                                             width: scores[key] + '%',
                                             background:
-                                                scores[key] >= 80
-                                                    ? 'var(--green)'
-                                                    : scores[key] >= 60
-                                                      ? 'var(--amber)'
-                                                      : 'var(--red)',
+                                                'linear-gradient(90deg, #7c3aed, #a855f7)',
                                         }"
                                     />
                                 </div>
@@ -377,15 +423,23 @@ const sendMessage = () => {
                             ← Back to Scenarios
                         </Link>
                         <button
-                            @click="
-                                router.post('/conversations', {
-                                    scenario_id: conversation.scenario_id,
-                                })
-                            "
+                            @click="startNewSession"
                             class="btn-primary rounded-xl px-5 py-2.5 text-xs"
                         >
                             Try Again →
                         </button>
+
+                        <a
+                            :href="`/conversations/${conversation.id}/export`"
+                            target="_blank"
+                            class="rounded-xl border px-5 py-2.5 text-xs font-semibold transition-all hover:opacity-80 no-underline"
+                            style="
+                                border-color: var(--border);
+                                color: var(--text-2);
+                            "
+                        >
+                            ↓ Download Transcript
+                        </a>
                     </div>
                 </div>
 
@@ -442,43 +496,155 @@ const sendMessage = () => {
                         </p>
                     </div>
 
-                    <!-- Message rows -->
-                    <div
-                        v-for="msg in localMessages"
-                        :key="msg.id"
-                        class="flex items-end gap-2"
-                        :class="
-                            isUser(msg.role) ? 'justify-end' : 'justify-start'
-                        "
-                    >
+                    <!-- Message rows / Skeleton loader -->
+                    <template v-if="isStarting">
                         <div
-                            v-if="!isUser(msg.role)"
-                            class="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border text-[10px] font-bold"
-                            style="
-                                background: rgba(124, 58, 237, 0.15);
-                                color: var(--accent);
-                                border-color: rgba(124, 58, 237, 0.2);
-                            "
-                            aria-hidden="true"
+                            class="flex items-end gap-2 justify-start animate-pulse"
                         >
-                            AI
+                            <div
+                                class="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border text-[10px] font-bold"
+                                style="
+                                    background: rgba(124, 58, 237, 0.15);
+                                    color: var(--accent);
+                                    border-color: rgba(124, 58, 237, 0.2);
+                                    opacity: 0.5;
+                                "
+                                aria-hidden="true"
+                            >
+                                AI
+                            </div>
+                            <div
+                                class="flex flex-col gap-2.5 max-w-[68%] rounded-[18px] rounded-bl-[4px] border px-4 py-[14px] w-full"
+                                style="
+                                    background: var(
+                                        --msg-ai-bg,
+                                        rgba(255, 255, 255, 0.8)
+                                    );
+                                    border-color: rgba(167, 139, 250, 0.2);
+                                    box-shadow: 0 2px 12px
+                                        rgba(124, 58, 237, 0.08);
+                                "
+                            >
+                                <div
+                                    class="h-3 bg-slate-200 dark:bg-slate-700 rounded-full"
+                                    style="width: 60%"
+                                ></div>
+                                <div
+                                    class="h-3 bg-slate-200 dark:bg-slate-700 rounded-full"
+                                    style="width: 80%"
+                                ></div>
+                                <div
+                                    class="h-3 bg-slate-200 dark:bg-slate-700 rounded-full"
+                                    style="width: 40%"
+                                ></div>
+                            </div>
                         </div>
+                    </template>
+                    <template v-else>
                         <div
-                            class="max-w-[68%] rounded-[18px] px-4 py-[11px] text-[13px] leading-relaxed"
+                            v-for="msg in localMessages"
+                            :key="msg.id"
+                            class="flex items-end gap-2 group"
                             :class="
                                 isUser(msg.role)
-                                    ? 'rounded-br-[4px]'
-                                    : 'rounded-bl-[4px] border'
-                            "
-                            :style="
-                                isUser(msg.role)
-                                    ? 'background: linear-gradient(135deg,#7c3aed,#a855f7); color: white; box-shadow: 0 4px 16px rgba(124,58,237,0.35);'
-                                    : 'background: var(--msg-ai-bg, rgba(255,255,255,0.8)); color: var(--msg-ai-text, #3b1d8a); border-color: rgba(167,139,250,0.2); box-shadow: 0 2px 12px rgba(124,58,237,0.08);'
+                                    ? 'justify-end'
+                                    : 'justify-start'
                             "
                         >
-                            {{ msg.content }}
+                            <div
+                                v-if="!isUser(msg.role)"
+                                class="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border text-[10px] font-bold"
+                                style="
+                                    background: rgba(124, 58, 237, 0.15);
+                                    color: var(--accent);
+                                    border-color: rgba(124, 58, 237, 0.2);
+                                "
+                                aria-hidden="true"
+                            >
+                                AI
+                            </div>
+
+                            <!-- bubble + copy button wrapper -->
+                            <div
+                                class="relative flex flex-col items-end gap-1 max-w-[68%]"
+                            >
+                                <div
+                                    class="w-full rounded-[18px] px-4 py-[11px] text-[13px] leading-relaxed"
+                                    :class="
+                                        isUser(msg.role)
+                                            ? 'rounded-br-[4px]'
+                                            : 'rounded-bl-[4px] border'
+                                    "
+                                    :style="
+                                        isUser(msg.role)
+                                            ? 'background: linear-gradient(135deg,#7c3aed,#a855f7); color: white; box-shadow: 0 4px 16px rgba(124,58,237,0.35);'
+                                            : 'background: var(--msg-ai-bg, rgba(255,255,255,0.8)); color: var(--msg-ai-text, var(--text)); border-color: var(--border); box-shadow: var(--shadow-sm);'
+                                    "
+                                >
+                                    {{ msg.content }}
+                                </div>
+
+                                <!-- copy button — appears on group hover -->
+                                <button
+                                    @click="copyMessage(msg)"
+                                    class="opacity-0 group-hover:opacity-100 transition-opacity duration-150 flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border"
+                                    :style="
+                                        isUser(msg.role)
+                                            ? 'color: var(--text-3); border-color: var(--border); background: var(--bg-surface);'
+                                            : 'color: var(--text-3); border-color: var(--border); background: var(--bg-surface);'
+                                    "
+                                    :aria-label="
+                                        copiedId === msg.id
+                                            ? 'Copied'
+                                            : 'Copy message'
+                                    "
+                                >
+                                    <!-- checkmark when copied -->
+                                    <svg
+                                        v-if="copiedId === msg.id"
+                                        width="11"
+                                        height="11"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="2.5"
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                        style="color: var(--green)"
+                                    >
+                                        <polyline points="20 6 9 17 4 12" />
+                                    </svg>
+                                    <!-- copy icon -->
+                                    <svg
+                                        v-else
+                                        width="11"
+                                        height="11"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="2"
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                    >
+                                        <rect
+                                            x="9"
+                                            y="9"
+                                            width="13"
+                                            height="13"
+                                            rx="2"
+                                            ry="2"
+                                        />
+                                        <path
+                                            d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
+                                        />
+                                    </svg>
+                                    <span>{{
+                                        copiedId === msg.id ? "Copied" : "Copy"
+                                    }}</span>
+                                </button>
+                            </div>
                         </div>
-                    </div>
+                    </template>
 
                     <!-- Typing indicator -->
                     <div v-if="processing" class="flex items-end gap-2">
@@ -500,7 +666,7 @@ const sendMessage = () => {
                                     --msg-ai-bg,
                                     rgba(255, 255, 255, 0.8)
                                 );
-                                border-color: rgba(167, 139, 250, 0.2);
+                                border-color: var(--border);
                             "
                         >
                             <span
@@ -529,10 +695,82 @@ const sendMessage = () => {
                         backdrop-filter: blur(20px);
                     "
                 >
+                    <!-- Error Banner -->
+                    <div
+                        v-if="errorMessage"
+                        class="mb-3 flex items-center justify-between gap-3 rounded-xl border px-4 py-3 text-xs transition-all duration-200"
+                        style="
+                            background: rgba(239, 68, 68, 0.1);
+                            border-color: rgba(239, 68, 68, 0.2);
+                            color: #ef4444;
+                        "
+                    >
+                        <div class="flex items-center gap-2">
+                            <svg
+                                width="14"
+                                height="14"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                            >
+                                <circle cx="12" cy="12" r="10" />
+                                <line x1="12" y1="8" x2="12" y2="12" />
+                                <line x1="12" y1="16" x2="12.01" y2="16" />
+                            </svg>
+                            <span>{{ errorMessage }}</span>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <button
+                                type="button"
+                                @click="retrySendMessage"
+                                class="font-bold underline hover:opacity-80 transition-opacity"
+                                style="
+                                    background: transparent;
+                                    border: 0;
+                                    color: inherit;
+                                    padding: 0;
+                                    cursor: pointer;
+                                "
+                            >
+                                Retry
+                            </button>
+                            <button
+                                type="button"
+                                @click="errorMessage = null"
+                                class="hover:opacity-80 transition-opacity"
+                                style="
+                                    background: transparent;
+                                    border: 0;
+                                    color: inherit;
+                                    padding: 0;
+                                    cursor: pointer;
+                                "
+                                aria-label="Dismiss"
+                            >
+                                <svg
+                                    width="14"
+                                    height="14"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                >
+                                    <line x1="18" y1="6" x2="6" y2="18" />
+                                    <line x1="6" y1="6" x2="18" y2="18" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+
                     <form
                         class="chat-form flex items-center gap-2 rounded-full border px-[18px] py-[6px] pr-[6px] backdrop-blur"
                         style="
-                            background: var(--bg-input);
+                            background: var(--bg-surface2);
                             border-color: rgba(167, 139, 250, 0.25);
                             box-shadow: var(--shadow-sm);
                         "
@@ -549,9 +787,17 @@ const sendMessage = () => {
                                     ? 'Listening...'
                                     : `Reply as yourself in ${conversation.scenario.title}…`
                             "
-                            :disabled="processing"
+                            :disabled="isSending || processing"
                             autocomplete="off"
                         />
+
+                        <p
+                            v-if="userMessageCount >= 9"
+                            class="text-[10px] text-center mt-1.5"
+                            style="color: var(--amber)"
+                        >
+                            Next message will complete the session
+                        </p>
 
                         <!-- Mic button -->
                         <button
@@ -563,7 +809,7 @@ const sendMessage = () => {
                                     ? 'background: linear-gradient(135deg,#dc2626,#ef4444); box-shadow: 0 4px 12px rgba(220,38,38,0.4);'
                                     : 'background: var(--bg-surface2); box-shadow: var(--shadow-sm);'
                             "
-                            :disabled="processing"
+                            :disabled="isSending || processing"
                             :aria-label="
                                 isListening
                                     ? 'Stop recording'
@@ -595,6 +841,49 @@ const sendMessage = () => {
                             />
                         </button>
 
+                        <!-- Message counter -->
+                        <span
+                            class="text-[10px] font-semibold flex-shrink-0 px-2"
+                            :style="{
+                                color:
+                                    userMessageCount >= 10
+                                        ? 'var(--red)'
+                                        : userMessageCount >= 8
+                                          ? 'var(--amber)'
+                                          : 'var(--text-3)',
+                            }"
+                        >
+                            {{ userMessageCount }}/10
+                        </span>
+
+                        <!-- Inline Spinner -->
+                        <div
+                            v-if="isSending"
+                            class="flex items-center justify-center mr-1"
+                            aria-label="Sending..."
+                        >
+                            <svg
+                                class="animate-spin h-5 w-5 text-purple-600"
+                                xmlns="http://www.w3.org/2000/svg"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                            >
+                                <circle
+                                    class="opacity-25"
+                                    cx="12"
+                                    cy="12"
+                                    r="10"
+                                    stroke="currentColor"
+                                    stroke-width="3"
+                                ></circle>
+                                <path
+                                    class="opacity-75"
+                                    fill="currentColor"
+                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                ></path>
+                            </svg>
+                        </div>
+
                         <!-- Send button -->
                         <button
                             type="submit"
@@ -607,9 +896,11 @@ const sendMessage = () => {
                                 );
                                 box-shadow: var(--shadow-btn);
                             "
-                            :disabled="processing || !messageText.trim()"
+                            :disabled="
+                                isSending || processing || !messageText.trim()
+                            "
                             :class="
-                                processing || !messageText.trim()
+                                isSending || processing || !messageText.trim()
                                     ? 'opacity-35 cursor-not-allowed'
                                     : 'hover:opacity-90 hover:scale-105'
                             "
@@ -630,19 +921,6 @@ const sendMessage = () => {
                             </svg>
                         </button>
                     </form>
-
-                    <p
-                        class="mt-2 text-center text-[11px]"
-                        style="color: var(--text-3)"
-                    >
-                        <Link
-                            href="/scenarios"
-                            class="font-semibold transition-opacity duration-200 hover:opacity-75"
-                            style="color: var(--accent)"
-                        >
-                            ← Back to scenarios
-                        </Link>
-                    </p>
                 </footer>
             </div>
         </div>
@@ -650,7 +928,7 @@ const sendMessage = () => {
         <!-- End Session confirmation modal -->
         <div
             v-if="showEndConfirm"
-            class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-sm"
+            class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
             @click.self="showEndConfirm = false"
         >
             <div

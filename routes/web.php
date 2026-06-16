@@ -30,6 +30,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/scenarios', [ScenarioController::class, 'index'])->name('scenarios.index');
     Route::get('/conversations', [ConversationController::class, 'index'])->name('conversations.index');
     Route::get('/conversations/{conversation}', [ConversationController::class, 'show'])->name('conversations.show');
+    Route::get('/conversations/{conversation}/export', [ConversationController::class, 'export'])
+        ->name('conversations.export');
 });
 
 // Write routes — rate limited to protect Groq API

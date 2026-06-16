@@ -64,21 +64,20 @@ const getEvaluationStatus = (score, isCompleted) => {
     <AuthenticatedLayout>
         <template #title>Sessions</template>
 
-        <div class="p-4 md:p-6">
+        <div
+            class="p-4 md:p-6"
+            style="background: var(--bg); min-height: calc(100vh - 56px)"
+        >
             <!-- Header Frame -->
             <div class="mb-8">
                 <h1
-                    class="text-[clamp(1.3rem,4vw,1.9rem)] font-extrabold leading-tight tracking-tight"
+                    class="text-[1.4rem] font-extrabold leading-tight tracking-tight"
                     style="color: var(--text)"
                 >
-                    Your Performance <span class="grad-text">Ledger</span>
+                    Your <span class="grad-text">Sessions</span>
                 </h1>
-                <p
-                    class="mt-1.5 text-[12px] sm:text-[13px] font-normal leading-relaxed"
-                    style="color: var(--text-2)"
-                >
-                    Review historical transcripts, trace performance breakdowns,
-                    and hop back into uncompleted training simulations.
+                <p class="mt-1 text-[12px]" style="color: var(--text-3)">
+                    Review past sessions and resume incomplete ones.
                 </p>
             </div>
 
@@ -88,7 +87,7 @@ const getEvaluationStatus = (score, isCompleted) => {
                 class="card overflow-hidden p-0"
             >
                 <!-- Desktop Matrix Layout -->
-                <div class="overflow-x-auto rounded-xl">
+                <div class="hidden md:block overflow-x-auto rounded-xl">
                     <table
                         class="min-w-[600px] w-full border-collapse text-left"
                     >
@@ -98,17 +97,14 @@ const getEvaluationStatus = (score, isCompleted) => {
                                 style="
                                     border-color: var(--border);
                                     color: var(--text-3);
+                                    background: var(--bg-surface2);
                                 "
                             >
                                 <th class="py-4 px-6 font-semibold">
-                                    Scenario Module
+                                    Scenario
                                 </th>
-                                <th class="py-4 px-6 font-semibold">
-                                    Date Attempted
-                                </th>
-                                <th class="py-4 px-6 font-semibold">
-                                    AI Evaluation
-                                </th>
+                                <th class="py-4 px-6 font-semibold">Date</th>
+                                <th class="py-4 px-6 font-semibold">Score</th>
                                 <th class="py-4 px-6 font-semibold text-right">
                                     Actions
                                 </th>
@@ -121,27 +117,39 @@ const getEvaluationStatus = (score, isCompleted) => {
                             <tr
                                 v-for="session in conversations"
                                 :key="session.id"
-                                class="transition-colors duration-150 hover:bg-[rgba(255,255,255,0.25)] dark:hover:bg-[rgba(255,255,255,0.02)]"
+                                class="transition-colors duration-150 cursor-pointer"
+                                style=""
+                                onmouseover="
+                                    this.style.background = 'var(--accent-bg)'
+                                "
+                                onmouseout="
+                                    this.style.background = 'transparent'
+                                "
                             >
                                 <!-- Title + Meta Block -->
                                 <td class="py-4 px-6">
-                                    <div
-                                        class="font-bold text-sm"
-                                        style="color: var(--text)"
-                                    >
-                                        {{
-                                            session.scenario?.title ||
-                                            "Custom Simulation Rehearsal"
-                                        }}
+                                    <div class="flex items-center gap-2">
+                                        <div
+                                            class="h-2 w-2 rounded-full flex-shrink-0"
+                                            style="background: var(--accent)"
+                                        />
+                                        <div
+                                            class="font-semibold text-[13px]"
+                                            style="color: var(--text)"
+                                        >
+                                            {{
+                                                session.scenario?.title ||
+                                                "Unknown Scenario"
+                                            }}
+                                        </div>
                                     </div>
                                     <div
-                                        class="text-[11px] font-normal mt-0.5"
-                                        style="color: var(--text-2)"
+                                        class="text-[11px] mt-0.5 ml-4"
+                                        style="color: var(--text-3)"
                                     >
-                                        Coach Identity:
                                         {{
                                             session.scenario?.ai_role ||
-                                            "Assessor"
+                                            "AI Coach"
                                         }}
                                     </div>
                                 </td>
@@ -267,22 +275,14 @@ const getEvaluationStatus = (score, isCompleted) => {
 
                         <Link
                             :href="`/conversations/${session.id}`"
-                            class="flex w-full items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-xs font-semibold transition-all border text-center no-underline min-h-[44px]"
-                            :style="{
-                                backgroundColor: session.is_completed
-                                    ? 'transparent'
-                                    : 'var(--accent-bg)',
-                                borderColor: 'var(--border)',
-                                color: session.is_completed
-                                    ? 'var(--text)'
-                                    : 'var(--accent)',
-                            }"
-                        >
-                            {{
+                            class="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-semibold no-underline transition-all duration-150"
+                            :style="
                                 session.is_completed
-                                    ? "Review Transcript & Grades"
-                                    : "Resume Open Rehearsal"
-                            }}
+                                    ? 'background: var(--accent-bg); color: var(--accent)'
+                                    : 'background: var(--gradient-accent); color: white; box-shadow: var(--shadow-btn)'
+                            "
+                        >
+                            {{ session.is_completed ? "Review" : "Resume" }}
                             <svg
                                 width="12"
                                 height="12"
@@ -305,7 +305,7 @@ const getEvaluationStatus = (score, isCompleted) => {
             <!-- Empty History State Placeholder -->
             <div
                 v-else
-                class="card text-center p-6 sm:p-10 max-w-md mx-auto mt-12 flex flex-col items-center gap-4"
+                class="card text-center p-6 sm:p-8 max-w-sm mx-auto mt-10 flex flex-col items-center gap-3"
             >
                 <div
                     class="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0"
@@ -336,8 +336,8 @@ const getEvaluationStatus = (score, isCompleted) => {
                         class="text-xs leading-relaxed max-w-xs"
                         style="color: var(--text-2)"
                     >
-                        Your portfolio dashboard is empty because you haven't
-                        initiated any training scenarios yet.
+                        You haven't started any sessions yet. Pick a scenario to
+                        begin.
                     </p>
                 </div>
                 <Link

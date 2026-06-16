@@ -17,7 +17,7 @@ defineProps({
     <AuthenticatedLayout>
         <template #title>Profile</template>
 
-        <div class="mx-auto max-w-2xl space-y-5">
+        <div class="mx-auto max-w-2xl space-y-5 px-5 py-6">
             <!-- Page heading -->
             <div class="mb-6">
                 <h1
