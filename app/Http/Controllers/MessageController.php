@@ -14,6 +14,8 @@ class MessageController extends Controller
 {
     public function store(Request $request, Conversation $conversation)
     {
+        $this->authorize('update', $conversation);
+
         $validated = $request->validate([
             'message_text' => 'required|string|max:2000',
         ]);

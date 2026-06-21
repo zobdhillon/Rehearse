@@ -1,6 +1,7 @@
 <script setup>
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout.vue";
-import { Head, Link } from "@inertiajs/vue3";
+import { Head, Link, router } from "@inertiajs/vue3";
+import { ref } from "vue";
 
 defineProps({
     conversations: {
@@ -9,7 +10,12 @@ defineProps({
     },
 });
 
-// Clean client-side timestamp parser
+const deleteConfirmId = ref(null);
+
+const confirmDelete = (id) => {
+    deleteConfirmId.value = id;
+};
+
 const formatDate = (dateString) => {
     if (!dateString) return "Just now";
     const date = new Date(dateString);
@@ -20,7 +26,6 @@ const formatDate = (dateString) => {
     });
 };
 
-// Computes dynamic performance colors based on AI feedback scoring
 const getEvaluationStatus = (score, isCompleted) => {
     if (!isCompleted) {
         return {
@@ -49,6 +54,19 @@ const getEvaluationStatus = (score, isCompleted) => {
             color: "var(--amber)",
         };
     return { text: `${score}/100`, bg: "var(--red-bg)", color: "var(--red)" };
+};
+
+const deleteSession = () => {
+    const id = deleteConfirmId.value;
+
+    router.delete(`/conversations/${id}`, {
+        preserveScroll: true,
+        preserveState: true,
+        only: ["conversations"],
+        onFinish: () => {
+            deleteConfirmId.value = null;
+        },
+    });
 };
 </script>
 
@@ -83,7 +101,7 @@ const getEvaluationStatus = (score, isCompleted) => {
                 <!-- Desktop Matrix Layout -->
                 <div class="hidden md:block overflow-x-auto rounded-xl">
                     <table
-                        class="min-w-[600px] w-full border-collapse text-left"
+                        class="min-w-[640px] w-full border-collapse text-left"
                     >
                         <thead>
                             <tr
@@ -104,6 +122,7 @@ const getEvaluationStatus = (score, isCompleted) => {
                                 <th class="py-4 px-6 font-semibold text-right">
                                     Actions
                                 </th>
+                                <th class="py-4 px-6 w-10"></th>
                             </tr>
                         </thead>
                         <tbody
@@ -206,6 +225,30 @@ const getEvaluationStatus = (score, isCompleted) => {
                                         </svg>
                                     </Link>
                                 </td>
+                                <td class="py-4 px-6 text-right">
+                                    <button
+                                        @click.stop="confirmDelete(session.id)"
+                                        class="p-1.5 rounded-lg transition-colors hover:bg-[var(--red-bg)]"
+                                        style="color: var(--text-3)"
+                                        aria-label="Delete session"
+                                    >
+                                        <svg
+                                            width="14"
+                                            height="14"
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            stroke-width="2"
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                        >
+                                            <polyline points="3 6 5 6 21 6" />
+                                            <path
+                                                d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+                                            />
+                                        </svg>
+                                    </button>
+                                </td>
                             </tr>
                         </tbody>
                     </table>
@@ -258,31 +301,56 @@ const getEvaluationStatus = (score, isCompleted) => {
                             </span>
                         </div>
 
-                        <Link
-                            :href="`/conversations/${session.id}`"
-                            class="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-semibold no-underline transition-all duration-150"
-                            :style="
-                                session.is_completed
-                                    ? 'background: var(--accent-bg); color: var(--accent)'
-                                    : 'background: var(--gradient-accent); color: white; box-shadow: var(--shadow-btn)'
-                            "
-                        >
-                            {{ session.is_completed ? "Review" : "Resume" }}
-                            <svg
-                                width="12"
-                                height="12"
-                                viewBox="0 0 12 12"
-                                fill="none"
+                        <div class="flex items-center gap-2">
+                            <Link
+                                :href="`/conversations/${session.id}`"
+                                class="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-semibold no-underline transition-all duration-150"
+                                :style="
+                                    session.is_completed
+                                        ? 'background: var(--accent-bg); color: var(--accent)'
+                                        : 'background: var(--gradient-accent); color: white; box-shadow: var(--shadow-btn)'
+                                "
                             >
-                                <path
-                                    d="M2 6h8M6 2l4 4-4 4"
+                                {{ session.is_completed ? "Review" : "Resume" }}
+                                <svg
+                                    width="12"
+                                    height="12"
+                                    viewBox="0 0 12 12"
+                                    fill="none"
+                                >
+                                    <path
+                                        d="M2 6h8M6 2l4 4-4 4"
+                                        stroke="currentColor"
+                                        stroke-width="1.4"
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                    />
+                                </svg>
+                            </Link>
+
+                            <button
+                                @click="confirmDelete(session.id)"
+                                class="p-2 rounded-lg transition-colors hover:bg-[var(--red-bg)]"
+                                style="color: var(--text-3)"
+                                aria-label="Delete session"
+                            >
+                                <svg
+                                    width="14"
+                                    height="14"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
                                     stroke="currentColor"
-                                    stroke-width="1.4"
+                                    stroke-width="2"
                                     stroke-linecap="round"
                                     stroke-linejoin="round"
-                                />
-                            </svg>
-                        </Link>
+                                >
+                                    <polyline points="3 6 5 6 21 6" />
+                                    <path
+                                        d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+                                    />
+                                </svg>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -340,6 +408,55 @@ const getEvaluationStatus = (score, isCompleted) => {
                         />
                     </svg>
                 </Link>
+            </div>
+
+            <!-- Delete confirmation modal -->
+            <div
+                v-if="deleteConfirmId"
+                class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+                @click.self="deleteConfirmId = null"
+            >
+                <div
+                    class="card w-full max-w-sm p-6 flex flex-col gap-4"
+                    style="background: var(--bg-surface)"
+                >
+                    <h2 class="text-base font-bold" style="color: var(--text)">
+                        Delete this session?
+                    </h2>
+                    <p
+                        class="text-xs leading-relaxed"
+                        style="color: var(--text-2)"
+                    >
+                        This will permanently remove the conversation and its
+                        feedback. This cannot be undone.
+                    </p>
+                    <div class="flex gap-3 justify-end">
+                        <button
+                            @click="deleteConfirmId = null"
+                            class="px-4 py-2 text-xs font-medium rounded-xl border transition-all hover:opacity-80"
+                            style="
+                                border-color: var(--border);
+                                color: var(--text-2);
+                                background: transparent;
+                            "
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            @click="deleteSession"
+                            class="px-4 py-2 text-xs font-semibold rounded-xl border-0 text-white transition-all hover:opacity-80"
+                            style="
+                                background: linear-gradient(
+                                    135deg,
+                                    #dc2626,
+                                    #ef4444
+                                );
+                            "
+                        >
+                            Delete
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </AuthenticatedLayout>

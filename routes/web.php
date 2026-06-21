@@ -32,6 +32,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/conversations/{conversation}', [ConversationController::class, 'show'])->name('conversations.show');
     Route::get('/conversations/{conversation}/export', [ConversationController::class, 'export'])
         ->name('conversations.export');
+    Route::delete('/conversations/{conversation}', [ConversationController::class, 'destroy'])
+        ->name('conversations.destroy');
 });
 
 // Write routes — rate limited to protect Groq API

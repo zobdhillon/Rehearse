@@ -3,12 +3,14 @@
 namespace App\Models;
 
 use App\Models\Conversation;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 // Ensure this says Scenario, NOT Conversation!
 class Scenario extends Model
 {
+    use HasFactory;
     protected $fillable = [
         'title',
         'description',

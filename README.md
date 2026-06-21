@@ -1,58 +1,97 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Rehearse — AI-Powered Conversation Practice
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Practice high-stakes conversations — interviews, salary negotiations, difficult workplace discussions — against a realistic AI persona, then get scored feedback on how you did.
 
-## About Laravel
+Built with Laravel, Inertia.js, Vue 3, and the Groq API.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+![Dashboard](screenshots/dashboardLight.png)
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Live Demo
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+**[your-railway-url-here]**
 
-## Learning Laravel
+- **Register your own account** to test the full signup → practice → feedback flow.
+- **Or use the demo account** to see a populated dashboard with session history:
+    - Email: `zob@example.test`
+    - Password: `12345678`
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+---
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+## Key Features
 
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
+**AI roleplay** — 20 scenario-based simulations powered by the Groq API. The AI stays in character, responds conversationally in 1–3 sentence replies, and ignores attempts to break persona. Write routes are rate-limited (30 req/min/user) to protect API quotas.
 
-## Agentic Development
+**Scoring & feedback** — sessions auto-complete after 10 exchanges (or end manually anytime) and get graded out of 100 across four skills: Clarity, Confidence, Objective, and Adaptability, plus a personalized coaching summary.
 
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+**Analytics dashboard** — daily streaks, weekly activity tracking, and month-over-month skill growth. Dashboard data is cached for 1 hour and invalidated instantly on session start/finish.
+
+**Session management** — browse, resume, delete past sessions, and export full transcripts with scores and feedback as PDF.
+
+**Auth & security** — registration, login, password reset, and email verification via Laravel Breeze. Users can only view, resume, or delete their own conversations.
+
+---
+
+## Screenshots
+
+| Dashboard (Light)                                  | Dashboard (Dark)                                 |
+| -------------------------------------------------- | ------------------------------------------------ |
+| ![Dashboard Light](screenshots/dashboardLight.png) | ![Dashboard Dark](screenshots/dashboardDark.png) |
+
+| Scenarios                                  | Conversation                              |
+| ------------------------------------------ | ----------------------------------------- |
+| ![Scenarios](screenshots/scenarioPage.png) | ![Conversation](screenshots/chatPage.png) |
+
+| Session History                          | Mobile View                           |
+| ---------------------------------------- | ------------------------------------- |
+| ![Sessions](screenshots/sessionPage.png) | ![Mobile](screenshots/mobileView.png) |
+
+---
+
+## Tech Stack
+
+Laravel 13 · PHP 8.4 · Vue 3 · Inertia.js · Tailwind CSS · MySQL · Groq API · Laravel Breeze
+
+---
+
+## Local Setup
 
 ```bash
-composer require laravel/boost --dev
+git clone https://github.com/zobdhillon/rehearse.git
+cd rehearse
 
-php artisan boost:install
+composer install
+npm install
+
+cp .env.example .env
+php artisan key:generate
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+Update `.env` with your database and Groq API key:
 
-## Contributing
+```env
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_DATABASE=rehearse
+DB_USERNAME=root
+DB_PASSWORD=
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+GROQ_API_KEY=your-groq-api-key
+```
 
-## Code of Conduct
+```bash
+php artisan migrate --seed
+npm run build
+php artisan serve
+```
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+Visit `http://localhost:8000` and register an account.
 
-## Security Vulnerabilities
+**Run tests:**
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+```bash
+php artisan test
+```
 
-## License
+---
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+Built as a portfolio project to demonstrate full-stack development with Laravel and Vue — including third-party AI API integration, real-time conversational UI, data visualization, and responsive design across light/dark themes.

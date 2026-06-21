@@ -15,10 +15,8 @@ class DashboardController extends Controller
         $user   = auth()->user();
         $userId = $user->id;
 
-        // ── Cached stats (1 hour TTL, invalidated on session complete/start) ──
         $cached = Cache::remember("dashboard.{$userId}", 3600, function () use ($userId) {
 
-            // ── Single query: all completed conversations with scores ──────────
             $allCompleted = Conversation::where('user_id', $userId)
                 ->where('status', 'completed')
                 ->whereNotNull('scores')
@@ -28,19 +26,15 @@ class DashboardController extends Controller
                 fn($c) => is_array($c->scores) ? $c->scores : json_decode($c->scores, true)
             )->filter();
 
-            // ── Single query: all conversations (any status) ──────────────────
             $allConversations = Conversation::where('user_id', $userId)
                 ->get(['id', 'scenario_id', 'status', 'created_at', 'scores']);
 
-            // Core counts — derived from collections, no extra queries
             $totalSessions     = $allConversations->count();
             $completedSessions = $allConversations->where('status', 'completed')->count();
             $scenariosTried    = $allConversations->pluck('scenario_id')->unique()->count();
 
-            // Best score
             $bestScore = $parsedScores->map(fn($s) => $s['final'] ?? null)->filter()->max();
 
-            // ── Streak — one query instead of one-per-day loop ────────────────
             $sessionDates = $allConversations
                 ->pluck('created_at')
                 ->map(fn($d) => $d->toDateString())
@@ -60,7 +54,6 @@ class DashboardController extends Controller
                 }
             }
 
-            // ── Weekly activity — derived from collection ─────────────────────
             $weekStart      = now()->startOfWeek(0);
             $weeklyActivity = [];
 
@@ -79,7 +72,6 @@ class DashboardController extends Controller
                 ))
                 ->count();
 
-            // ── Skill averages ────────────────────────────────────────────────
             $skillKeys = ['clarity', 'confidence', 'objective', 'adaptability'];
             $skillAvgs = array_fill_keys($skillKeys, 0);
 
@@ -91,7 +83,6 @@ class DashboardController extends Controller
                 }
             }
 
-            // ── Score improvement (this month vs last) ────────────────────────
             $thisMonth = now()->month;
             $thisYear  = now()->year;
             $lastMonth = now()->subMonth()->month;
@@ -135,15 +126,11 @@ class DashboardController extends Controller
             );
         });
 
-        // ── Not cached: streak badge update + recent sessions ─────────────────
-        // UserStat update kept outside cache — it's a write, not a read
         $userStat = UserStat::firstOrCreate(['user_id' => $userId]);
         if ($cached['currentStreak'] > $userStat->best_streak) {
             $userStat->update(['best_streak' => $cached['currentStreak']]);
         }
 
-        // Recent sessions kept outside cache — always fresh, lightweight query
-        // No N+1: eager loads scenario in a single JOIN
         $recentSessions = Conversation::where('user_id', $userId)
             ->with('scenario:id,title,color')
             ->latest()
@@ -167,7 +154,6 @@ class DashboardController extends Controller
                 ];
             });
 
-        // Featured scenarios — static, cached separately for 24 hours
         $featuredScenarios = Cache::remember(
             'dashboard.featuredScenarios',
             86400,

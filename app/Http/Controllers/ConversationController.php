@@ -13,6 +13,9 @@ use Inertia\Inertia;
 
 class ConversationController extends Controller
 {
+
+    private const EXPECTED_USER_TURNS = 10;
+
     public function index()
     {
         $conversations = Conversation::with('scenario')
@@ -125,20 +128,15 @@ class ConversationController extends Controller
 
     public function show(Conversation $conversation)
     {
-        if ($conversation->user_id !== auth()->id()) {
-            abort(403);
-        }
+        $this->authorize('view', $conversation);
 
         return Inertia::render('Conversations/Show', [
             'conversation' => $conversation->load(['messages', 'scenario']),
         ]);
     }
-
     public function complete(Conversation $conversation)
     {
-        if ($conversation->user_id !== auth()->id()) {
-            abort(403);
-        }
+        $this->authorize('view', $conversation);
 
         if ($conversation->status === 'completed') {
             return redirect()->route('conversations.show', $conversation->id);
@@ -146,20 +144,55 @@ class ConversationController extends Controller
 
         $messages = $conversation->messages()->orderBy('created_at')->get();
 
+        $userTurns      = $messages->where('role', 'user');
+        $userTurnCount  = $userTurns->count();
+        $expectedTurns  = self::EXPECTED_USER_TURNS;
+        $completionRate = $expectedTurns > 0
+            ? (int) round(min($userTurnCount / $expectedTurns, 1) * 100)
+            : 100;
+
+        $substantiveAnswers = $userTurns->filter(function ($msg) {
+            return str_word_count($msg->content) >= 4;
+        })->count();
+
         $transcript = $messages->map(function ($msg) {
             $label = $msg->role === 'user' ? 'Candidate' : 'Interviewer';
             return "{$label}: {$msg->content}";
         })->implode("\n");
 
-        $scoringPrompt = "You are an expert communication coach. Review this conversation transcript and evaluate the user's (Candidate) performance.\n\n" .
+        $scoringPrompt = "You are a STRICT communication coach grading a practice interview. " .
+            "Do not be lenient or encouraging in your scoring — score based only on what is actually in the transcript.\n\n" .
+
+            "SESSION COVERAGE (you MUST factor this into every score):\n" .
+            "- Expected candidate turns for a complete session: {$expectedTurns}\n" .
+            "- Actual candidate turns provided: {$userTurnCount}\n" .
+            "- Turns with a substantive answer (4+ words): {$substantiveAnswers}\n" .
+            "- Session completion: {$completionRate}%\n\n" .
+
+            "STRICT SCORING RULES:\n" .
+            "1. If completion is below 100%, NONE of the 4 dimension scores may exceed the completion percentage " .
+            "(e.g. if completion is 20%, no score can be above 20), because an incomplete session cannot " .
+            "demonstrate full competence regardless of how good the few answers were.\n" .
+            "2. Unanswered or skipped questions (interviewer turns with no matching candidate response, " .
+            "or one-word/low-effort replies) count as a failure on that exchange — do not skip over them when scoring.\n" .
+            "3. A short, well-phrased answer to 2 out of 10 questions does NOT deserve a high score just because " .
+            "those 2 answers were good. Evaluate coverage of the full scenario, not just answer quality in isolation.\n" .
+            "4. Do not round up or give benefit of the doubt. If you are unsure, score lower.\n" .
+            "5. objective (goal achievement) should be scored especially harshly if the candidate ended the " .
+            "session before the scenario's goal could reasonably be reached.\n\n" .
+
             "TRANSCRIPT:\n{$transcript}\n\n" .
-            "Score the candidate on these 4 dimensions out of 100:\n" .
-            "- clarity: How clearly did they communicate their points?\n" .
-            "- confidence: How confident and assertive were they?\n" .
-            "- objective: How well did they achieve the scenario goal?\n" .
-            "- adaptability: How well did they respond to pushback and adapt?\n\n" .
-            "Calculate final as the average of all 4 scores.\n\n" .
-            "Also write 2-3 sentences of specific, actionable feedback.\n\n" .
+
+            "Score the candidate on these 4 dimensions out of 100, applying the rules above:\n" .
+            "- clarity: How clearly did they communicate across the ENTIRE session, not just answered turns?\n" .
+            "- confidence: How confident and assertive were they, accounting for any avoided questions?\n" .
+            "- objective: How well did they achieve the full scenario goal, given how much they actually completed?\n" .
+            "- adaptability: How well did they respond to pushback across the whole session?\n\n" .
+
+            "Calculate final as the average of all 4 scores, rounded down (not up).\n" .
+            "Write 2-3 sentences of specific, honest feedback. If the session was incomplete, say so directly " .
+            "and tell them to finish more questions next time — do not soften this.\n\n" .
+
             "CRITICAL: Return ONLY a valid JSON object, no extra text, no markdown, no backticks:\n" .
             '{"final":85,"clarity":90,"confidence":80,"objective":85,"adaptability":85,"feedback":"Your feedback here."}';
 
@@ -187,15 +220,21 @@ class ConversationController extends Controller
 
                 $validScores = $scores && isset($scores['final']);
 
+                $finalScores = $validScores
+                    ? $this->enforceCompletionCap($scores, $completionRate)
+                    : $this->fallbackScores($completionRate);
+
                 Log::channel('ai')->info('Scoring completed', [
-                    'conversation_id' => $conversation->id,
-                    'latency_ms'      => $latency,
-                    'scores_valid'    => $validScores,
-                    'final_score'     => $scores['final'] ?? null,
+                    'conversation_id'  => $conversation->id,
+                    'latency_ms'       => $latency,
+                    'scores_valid'     => $validScores,
+                    'final_score'      => $finalScores['final'],
+                    'completion_rate'  => $completionRate,
+                    'user_turn_count'  => $userTurnCount,
                 ]);
 
                 $conversation->update([
-                    'scores' => $validScores ? $scores : $this->fallbackScores(),
+                    'scores' => $finalScores,
                     'status' => 'completed',
                 ]);
             } else {
@@ -206,7 +245,7 @@ class ConversationController extends Controller
                 ]);
 
                 $conversation->update([
-                    'scores' => $this->fallbackScores(),
+                    'scores' => $this->fallbackScores($completionRate),
                     'status' => 'completed',
                 ]);
             }
@@ -222,7 +261,7 @@ class ConversationController extends Controller
             ]);
 
             $conversation->update([
-                'scores' => $this->fallbackScores(),
+                'scores' => $this->fallbackScores($completionRate),
                 'status' => 'completed',
             ]);
 
@@ -234,9 +273,7 @@ class ConversationController extends Controller
 
     public function export(Conversation $conversation)
     {
-        if ($conversation->user_id !== auth()->id()) {
-            abort(403);
-        }
+        $this->authorize('view', $conversation);
 
         $conversation->load(['scenario', 'messages']);
 
@@ -252,15 +289,50 @@ class ConversationController extends Controller
         return $pdf->download($filename);
     }
 
-    private function fallbackScores(): array
+    private function enforceCompletionCap(array $scores, int $completionRate): array
     {
+        $dimensions = ['clarity', 'confidence', 'objective', 'adaptability'];
+
+        foreach ($dimensions as $dim) {
+            if (isset($scores[$dim])) {
+                $scores[$dim] = min((int) $scores[$dim], $completionRate);
+            }
+        }
+
+        $present = array_filter($dimensions, fn($d) => isset($scores[$d]));
+        $scores['final'] = $present
+            ? (int) floor(array_sum(array_map(fn($d) => $scores[$d], $present)) / count($present))
+            : 0;
+
+        $scores['completion_rate'] = $completionRate;
+
+        return $scores;
+    }
+
+    private function fallbackScores(int $completionRate = 100): array
+    {
+        $capped = min(50, $completionRate);
+
         return [
-            'clarity'      => 50,
-            'confidence'   => 50,
-            'objective'    => 50,
-            'adaptability' => 50,
-            'final'        => 50,
-            'feedback'     => 'Session completed. Unable to generate detailed feedback this time.',
+            'clarity'         => $capped,
+            'confidence'      => $capped,
+            'objective'       => $capped,
+            'adaptability'    => $capped,
+            'final'           => $capped,
+            'completion_rate' => $completionRate,
+            'feedback'        => $completionRate < 100
+                ? "Session ended early ({$completionRate}% complete). Unable to generate detailed feedback this time — try finishing more questions next session."
+                : 'Session completed. Unable to generate detailed feedback this time.',
         ];
+    }
+
+    public function destroy(Conversation $conversation)
+    {
+        $this->authorize('view', $conversation);
+
+        $conversation->delete();
+
+        return redirect()->route('conversations.index')
+            ->with('success', 'Session deleted.');
     }
 }
