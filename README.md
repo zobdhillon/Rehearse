@@ -8,7 +8,7 @@ Built with Laravel, Inertia.js, Vue 3, and the Groq API.
 
 ## Live Demo
 
-**[your-railway-url-here]**
+**[(https://rehearse-ai.up.railway.app/)]**
 
 - **Register your own account** to test the full signup → practice → feedback flow.
 - **Or use the demo account** to see a populated dashboard with session history:
