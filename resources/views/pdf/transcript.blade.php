@@ -171,6 +171,42 @@
                 background: #e8eef3;
                 margin: 20px 0;
             }
+
+            /* NEW: Pulse animation for low score ring */
+            @keyframes pulse {
+                0% {
+                    opacity: 0.3;
+                    transform: scale(1);
+                }
+
+                50% {
+                    opacity: 0.8;
+                    transform: scale(1.05);
+                }
+
+                100% {
+                    opacity: 0.3;
+                    transform: scale(1);
+                }
+            }
+
+            .pulse-ring {
+                animation: pulse 2s ease-in-out infinite;
+            }
+
+            /* NEW: Warning badge for low scores */
+            .score-warning {
+                display: inline-block;
+                background: #d9534f;
+                color: white;
+                font-size: 8px;
+                font-weight: bold;
+                text-transform: uppercase;
+                letter-spacing: .06em;
+                padding: 2px 8px;
+                border-radius: 99px;
+                margin-left: 8px;
+            }
         </style>
     </head>
 
@@ -188,42 +224,74 @@
 
         {{-- Score hero --}}
         @if ($scores)
-            <table style="width:100%;background:#f0f9f8;border-bottom:2px solid #d0eeeb;border-collapse:collapse;">
+            @php
+                $finalScore = $scores['final'];
+                $isLowScore = $finalScore < 40;
+                $scoreColor = $isLowScore ? '#d9534f' : '#0f7c6e';
+                $innerFill = $isLowScore ? '#fde8e8' : '#e6f5f3';
+                $outerStroke = $isLowScore ? '#d9534f' : '#0f7c6e';
+                $performanceLabel =
+                    $finalScore >= 80 ? 'Excellent' : ($finalScore >= 60 ? 'Good Effort' : 'Keep Practising');
+            @endphp
+
+            <table
+                style="width:100%;background:{{ $isLowScore ? '#fdf0ed' : '#f0f9f8' }};border-bottom:2px solid {{ $isLowScore ? '#f5c6c2' : '#d0eeeb' }};border-collapse:collapse;">
                 <tr>
                     <td style="padding:24px 0 24px 40px;width:90px;vertical-align:middle;">
 
                         <svg width="76" height="76" viewBox="0 0 76 76" xmlns="http://www.w3.org/2000/svg">
-
-                            <circle cx="38" cy="38" r="35" fill="#ffffff" stroke="#0f7c6e"
+                            <!-- Outer ring -->
+                            <circle cx="38" cy="38" r="35" fill="#ffffff" stroke="{{ $outerStroke }}"
                                 stroke-width="3.5" />
 
-                            <circle cx="38" cy="38" r="31" fill="#e6f5f3" stroke="none" />
+                            <!-- Inner fill -->
+                            <circle cx="38" cy="38" r="31" fill="{{ $innerFill }}" stroke="none" />
 
+                            <!-- NEW: Pulse ring for low scores -->
+                            @if ($isLowScore)
+                                <circle cx="38" cy="38" r="35" fill="none" stroke="#d9534f"
+                                    stroke-width="1.5" stroke-dasharray="8 4" class="pulse-ring" />
+                            @endif
+
+                            <!-- Score text -->
                             <text x="38" y="38" dy="8" text-anchor="middle"
                                 font-family="DejaVu Sans, sans-serif" font-size="24" font-weight="bold"
-                                fill="#0f7c6e">{{ $scores['final'] }}</text>
+                                fill="{{ $scoreColor }}">{{ $finalScore }}</text>
+
+                            <!-- NEW: Exclamation mark for low scores -->
+                            @if ($isLowScore)
+                                <text x="52" y="28" dy="0" text-anchor="middle"
+                                    font-family="DejaVu Sans, sans-serif" font-size="12" font-weight="bold"
+                                    fill="#d9534f">!</text>
+                            @endif
                         </svg>
                     </td>
                     <td style="padding:24px 40px 24px 12px;vertical-align:middle;">
                         <div
-                            style="font-size:9px;font-weight:bold;text-transform:uppercase;letter-spacing:.1em;color:#14a896;margin-bottom:4px;">
+                            style="font-size:9px;font-weight:bold;text-transform:uppercase;letter-spacing:.1em;color:{{ $isLowScore ? '#d9534f' : '#14a896' }};margin-bottom:4px;">
                             Overall Performance
+                            @if ($isLowScore)
+                                <span class="score-warning">Needs Improvement</span>
+                            @endif
                         </div>
                         <div style="font-size:16px;font-weight:bold;color:#0d1f2d;margin-bottom:12px;">
-                            @if ($scores['final'] >= 80)
-                                Excellent
-                            @elseif($scores['final'] >= 60)
-                                Good Effort
-                            @else
-                                Keep Practising
+                            {{ $performanceLabel }}
+                            @if ($isLowScore)
+                                <span style="font-size:12px;font-weight:normal;color:#d9534f;margin-left:8px;">⚠️ Below
+                                    target</span>
                             @endif
                         </div>
                         <table style="border-collapse:collapse;">
                             <tr>
                                 @foreach (['clarity' => 'Clarity', 'confidence' => 'Confidence', 'objective' => 'Objective', 'adaptability' => 'Adaptability'] as $key => $label)
+                                    @php
+                                        $subScore = $scores[$key] ?? 0;
+                                        $isSubLow = $subScore < 40;
+                                    @endphp
                                     <td style="text-align:center;padding-right:20px;">
-                                        <div style="font-size:14px;font-weight:bold;color:#0f7c6e;">
-                                            {{ $scores[$key] ?? '—' }}</div>
+                                        <div
+                                            style="font-size:14px;font-weight:bold;color:{{ $isSubLow ? '#d9534f' : '#0f7c6e' }};">
+                                            {{ $subScore }}</div>
                                         <div
                                             style="font-size:9px;color:#6b8299;text-transform:uppercase;letter-spacing:.06em;margin-top:2px;">
                                             {{ $label }}</div>
@@ -250,13 +318,26 @@
                     <div class="section-title">Performance Breakdown</div>
                 </div>
                 @foreach (['clarity' => 'Clarity', 'confidence' => 'Confidence', 'objective' => 'Objective', 'adaptability' => 'Adaptability'] as $key => $label)
+                    @php
+                        $subScore = $scores[$key] ?? 0;
+                        $isSubLow = $subScore < 40;
+                        $barColor = $isSubLow ? '#d9534f' : '#0f7c6e';
+                        $scoreColor = $isSubLow ? '#d9534f' : '#0f7c6e';
+                    @endphp
                     <div class="breakdown-row">
                         <div class="breakdown-top">
-                            <span class="breakdown-name">{{ $label }}</span>
-                            <span class="breakdown-score">{{ $scores[$key] ?? '—' }}/100</span>
+                            <span class="breakdown-name">
+                                {{ $label }}
+                                @if ($isSubLow)
+                                    <span style="color:#d9534f;font-size:8px;margin-left:4px;">⚠️</span>
+                                @endif
+                            </span>
+                            <span class="breakdown-score"
+                                style="color:{{ $scoreColor }};">{{ $subScore }}/100</span>
                         </div>
                         <div class="bar-track">
-                            <div class="bar-fill" style="width:{{ $scores[$key] ?? 0 }}%;"></div>
+                            <div class="bar-fill" style="width:{{ $subScore }}%;background:{{ $barColor }};">
+                            </div>
                         </div>
                     </div>
                 @endforeach
@@ -268,8 +349,15 @@
                         <div class="section-dot"></div>
                         <div class="section-title">Coach Feedback</div>
                     </div>
-                    <div class="feedback-box">
+                    <div class="feedback-box"
+                        style="{{ $isLowScore ? 'border-color:#f5c6c2;background:#fdf0ed;' : '' }}">
                         <p class="feedback-text">{{ $scores['feedback'] }}</p>
+                        @if ($isLowScore)
+                            <p style="margin-top:8px;color:#d9534f;font-weight:bold;font-size:10px;">
+                                💡 Recommendation: Consider reviewing the fundamentals and practicing with our guided
+                                modules.
+                            </p>
+                        @endif
                     </div>
                     <div class="divider"></div>
                 @endif
