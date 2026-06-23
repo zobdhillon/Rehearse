@@ -172,7 +172,7 @@
                 margin: 20px 0;
             }
 
-            /* NEW: Pulse animation for low score ring */
+            /* Pulse animation for low score ring */
             @keyframes pulse {
                 0% {
                     opacity: 0.3;
@@ -194,7 +194,7 @@
                 animation: pulse 2s ease-in-out infinite;
             }
 
-            /* NEW: Warning badge for low scores */
+            /* Warning badge for low scores */
             .score-warning {
                 display: inline-block;
                 background: #d9534f;
@@ -206,6 +206,19 @@
                 padding: 2px 8px;
                 border-radius: 99px;
                 margin-left: 8px;
+            }
+
+            /* Low score text color */
+            .text-low {
+                color: #d9534f !important;
+            }
+
+            .bg-low {
+                background: #fdf0ed !important;
+            }
+
+            .border-low {
+                border-color: #f5c6c2 !important;
             }
         </style>
     </head>
@@ -225,17 +238,27 @@
         {{-- Score hero --}}
         @if ($scores)
             @php
-                $finalScore = $scores['final'];
-                $isLowScore = $finalScore < 40;
-                $scoreColor = $isLowScore ? '#d9534f' : '#0f7c6e';
-                $innerFill = $isLowScore ? '#fde8e8' : '#e6f5f3';
-                $outerStroke = $isLowScore ? '#d9534f' : '#0f7c6e';
-                $performanceLabel =
-                    $finalScore >= 80 ? 'Excellent' : ($finalScore >= 60 ? 'Good Effort' : 'Keep Practising');
+                // Get the final score - this will be 30 in your case
+                $finalScore = (int) $scores['final'];
+
+                // Check if it's a low score (below 40)
+$isLowScore = $finalScore < 40;
+
+// Set colors based on score
+$scoreColor = $isLowScore ? '#d9534f' : '#0f7c6e';
+$innerFill = $isLowScore ? '#fde8e8' : '#e6f5f3';
+$outerStroke = $isLowScore ? '#d9534f' : '#0f7c6e';
+$headerBg = $isLowScore ? '#fdf0ed' : '#f0f9f8';
+$borderColor = $isLowScore ? '#f5c6c2' : '#d0eeeb';
+$labelColor = $isLowScore ? '#d9534f' : '#14a896';
+
+// Performance label
+$performanceLabel =
+    $finalScore >= 80 ? 'Excellent' : ($finalScore >= 60 ? 'Good Effort' : 'Keep Practising');
             @endphp
 
             <table
-                style="width:100%;background:{{ $isLowScore ? '#fdf0ed' : '#f0f9f8' }};border-bottom:2px solid {{ $isLowScore ? '#f5c6c2' : '#d0eeeb' }};border-collapse:collapse;">
+                style="width:100%;background:{{ $headerBg }};border-bottom:2px solid {{ $borderColor }};border-collapse:collapse;">
                 <tr>
                     <td style="padding:24px 0 24px 40px;width:90px;vertical-align:middle;">
 
@@ -247,18 +270,18 @@
                             <!-- Inner fill -->
                             <circle cx="38" cy="38" r="31" fill="{{ $innerFill }}" stroke="none" />
 
-                            <!-- NEW: Pulse ring for low scores -->
+                            <!-- Pulse ring for low scores -->
                             @if ($isLowScore)
                                 <circle cx="38" cy="38" r="35" fill="none" stroke="#d9534f"
                                     stroke-width="1.5" stroke-dasharray="8 4" class="pulse-ring" />
                             @endif
 
-                            <!-- Score text -->
+                            <!-- Score text - THIS IS WHERE 30 APPEARS -->
                             <text x="38" y="38" dy="8" text-anchor="middle"
                                 font-family="DejaVu Sans, sans-serif" font-size="24" font-weight="bold"
                                 fill="{{ $scoreColor }}">{{ $finalScore }}</text>
 
-                            <!-- NEW: Exclamation mark for low scores -->
+                            <!-- Exclamation mark for low scores -->
                             @if ($isLowScore)
                                 <text x="52" y="28" dy="0" text-anchor="middle"
                                     font-family="DejaVu Sans, sans-serif" font-size="12" font-weight="bold"
@@ -268,7 +291,7 @@
                     </td>
                     <td style="padding:24px 40px 24px 12px;vertical-align:middle;">
                         <div
-                            style="font-size:9px;font-weight:bold;text-transform:uppercase;letter-spacing:.1em;color:{{ $isLowScore ? '#d9534f' : '#14a896' }};margin-bottom:4px;">
+                            style="font-size:9px;font-weight:bold;text-transform:uppercase;letter-spacing:.1em;color:{{ $labelColor }};margin-bottom:4px;">
                             Overall Performance
                             @if ($isLowScore)
                                 <span class="score-warning">Needs Improvement</span>
@@ -285,12 +308,12 @@
                             <tr>
                                 @foreach (['clarity' => 'Clarity', 'confidence' => 'Confidence', 'objective' => 'Objective', 'adaptability' => 'Adaptability'] as $key => $label)
                                     @php
-                                        $subScore = $scores[$key] ?? 0;
+                                        $subScore = (int) ($scores[$key] ?? 0);
                                         $isSubLow = $subScore < 40;
+                                        $subColor = $isSubLow ? '#d9534f' : '#0f7c6e';
                                     @endphp
                                     <td style="text-align:center;padding-right:20px;">
-                                        <div
-                                            style="font-size:14px;font-weight:bold;color:{{ $isSubLow ? '#d9534f' : '#0f7c6e' }};">
+                                        <div style="font-size:14px;font-weight:bold;color:{{ $subColor }};">
                                             {{ $subScore }}</div>
                                         <div
                                             style="font-size:9px;color:#6b8299;text-transform:uppercase;letter-spacing:.06em;margin-top:2px;">
@@ -319,7 +342,7 @@
                 </div>
                 @foreach (['clarity' => 'Clarity', 'confidence' => 'Confidence', 'objective' => 'Objective', 'adaptability' => 'Adaptability'] as $key => $label)
                     @php
-                        $subScore = $scores[$key] ?? 0;
+                        $subScore = (int) ($scores[$key] ?? 0);
                         $isSubLow = $subScore < 40;
                         $barColor = $isSubLow ? '#d9534f' : '#0f7c6e';
                         $scoreColor = $isSubLow ? '#d9534f' : '#0f7c6e';
