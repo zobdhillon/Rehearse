@@ -131,7 +131,6 @@
                 color: #0f7c6e;
             }
 
-            /* solid fill — DomPDF does not support linear-gradient on background */
             .bar-track {
                 height: 7px;
                 background: #d0eeeb;
@@ -191,13 +190,18 @@
         @if ($scores)
             <table style="width:100%;background:#f0f9f8;border-bottom:2px solid #d0eeeb;border-collapse:collapse;">
                 <tr>
-                    <td style="padding:24px 0 24px 40px;width:96px;vertical-align:middle;">
-                        {{-- SVG circle: DomPDF renders this perfectly, unlike border-radius:50% on divs --}}
-                        <svg width="80" height="80" viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
-                            <circle cx="40" cy="40" r="36" fill="#f0f9f8" stroke="#0f7c6e"
-                                stroke-width="3" />
-                            <text x="40" y="46" text-anchor="middle" font-family="DejaVu Sans, sans-serif"
-                                font-size="22" font-weight="bold" fill="#0f7c6e">{{ $scores['final'] }}</text>
+                    <td style="padding:24px 0 24px 40px;width:90px;vertical-align:middle;">
+
+                        <svg width="76" height="76" viewBox="0 0 76 76" xmlns="http://www.w3.org/2000/svg">
+
+                            <circle cx="38" cy="38" r="35" fill="#ffffff" stroke="#0f7c6e"
+                                stroke-width="3.5" />
+
+                            <circle cx="38" cy="38" r="31" fill="#e6f5f3" stroke="none" />
+
+                            <text x="38" y="38" dy="8" text-anchor="middle"
+                                font-family="DejaVu Sans, sans-serif" font-size="24" font-weight="bold"
+                                fill="#0f7c6e">{{ $scores['final'] }}</text>
                         </svg>
                     </td>
                     <td style="padding:24px 40px 24px 12px;vertical-align:middle;">
