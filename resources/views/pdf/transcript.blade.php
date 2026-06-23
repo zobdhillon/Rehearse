@@ -13,13 +13,13 @@
             body {
                 font-family: DejaVu Sans, sans-serif;
                 font-size: 11px;
-                color: #1a1a2e;
+                color: #0d1f2d;
                 background: #ffffff;
             }
 
             /* ── Header band ── */
             .header {
-                background: #7c3aed;
+                background: #0f7c6e;
                 padding: 32px 40px 28px;
                 color: white;
             }
@@ -47,68 +47,9 @@
 
             /* ── Score hero ── */
             .score-hero {
-                background: #f5f0ff;
+                background: #f0f9f8;
                 padding: 24px 40px;
-                display: flex;
-                align-items: center;
-                gap: 32px;
-                border-bottom: 2px solid #ede9fe;
-            }
-
-            .score-circle {
-                width: 72px;
-                height: 72px;
-                border-radius: 50%;
-                border: 3px solid #7c3aed;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                flex-shrink: 0;
-            }
-
-            .score-circle-num {
-                font-size: 24px;
-                font-weight: bold;
-                color: #7c3aed;
-            }
-
-            .score-label-main {
-                font-size: 9px;
-                font-weight: bold;
-                text-transform: uppercase;
-                letter-spacing: .1em;
-                color: #9f7aea;
-                margin-bottom: 4px;
-            }
-
-            .score-verdict {
-                font-size: 16px;
-                font-weight: bold;
-                color: #1a1a2e;
-                margin-bottom: 10px;
-            }
-
-            .score-dims {
-                display: flex;
-                gap: 16px;
-            }
-
-            .score-dim {
-                text-align: center;
-            }
-
-            .score-dim-val {
-                font-size: 14px;
-                font-weight: bold;
-                color: #7c3aed;
-            }
-
-            .score-dim-name {
-                font-size: 9px;
-                color: #888;
-                text-transform: uppercase;
-                letter-spacing: .06em;
-                margin-top: 1px;
+                border-bottom: 2px solid #d0eeeb;
             }
 
             /* ── Body ── */
@@ -132,7 +73,7 @@
             .section-dot {
                 width: 4px;
                 height: 16px;
-                background: #7c3aed;
+                background: #0f7c6e;
                 border-radius: 2px;
                 flex-shrink: 0;
             }
@@ -142,7 +83,7 @@
                 font-weight: bold;
                 text-transform: uppercase;
                 letter-spacing: .1em;
-                color: #7c3aed;
+                color: #0f7c6e;
             }
 
             /* ── Messages ── */
@@ -161,22 +102,22 @@
             }
 
             .message.user .message-role {
-                color: #7c3aed;
+                color: #0f7c6e;
             }
 
             .message-bubble {
-                background: #f8f8fb;
-                border-left: 2px solid #e5e7eb;
+                background: #f7f9fb;
+                border-left: 2px solid #e0e7ef;
                 border-radius: 0 6px 6px 0;
                 padding: 8px 12px;
                 line-height: 1.65;
-                color: #374151;
+                color: #3d5166;
             }
 
             .message.user .message-bubble {
-                background: #f5f0ff;
-                border-left-color: #7c3aed;
-                color: #1a1a2e;
+                background: #f0f9f8;
+                border-left-color: #0f7c6e;
+                color: #0d1f2d;
             }
 
             /* ── Breakdown bars ── */
@@ -193,38 +134,38 @@
             .breakdown-name {
                 font-size: 10px;
                 font-weight: bold;
-                color: #374151;
+                color: #3d5166;
             }
 
             .breakdown-score {
                 font-size: 10px;
                 font-weight: bold;
-                color: #7c3aed;
+                color: #0f7c6e;
             }
 
             .bar-track {
                 height: 6px;
-                background: #ede9fe;
+                background: #d0eeeb;
                 border-radius: 3px;
             }
 
             .bar-fill {
                 height: 6px;
                 border-radius: 3px;
-                background: #7c3aed;
+                background: linear-gradient(90deg, #14a896 0%, #0f7c6e 100%);
             }
 
             /* ── Feedback box ── */
             .feedback-box {
-                background: #f5f0ff;
-                border: 1px solid #ddd6fe;
+                background: #f0f9f8;
+                border: 1px solid #d0eeeb;
                 border-radius: 8px;
                 padding: 16px 18px;
             }
 
             .feedback-text {
                 line-height: 1.7;
-                color: #4c3d8f;
+                color: #0d4a42;
                 font-size: 11px;
             }
 
@@ -232,18 +173,32 @@
             .footer {
                 margin-top: 36px;
                 padding-top: 14px;
-                border-top: 1px solid #f0f0f0;
+                border-top: 1px solid #e8eef3;
                 display: flex;
                 justify-content: space-between;
                 font-size: 9px;
-                color: #bbb;
+                color: #6b8299;
             }
 
             /* ── Divider ── */
             .divider {
                 height: 1px;
-                background: #f3f4f6;
+                background: #e8eef3;
                 margin: 20px 0;
+            }
+
+            /* ── Completion badge ── */
+            .completion-badge {
+                display: inline-block;
+                background: #d0eeeb;
+                color: #0f7c6e;
+                font-size: 9px;
+                font-weight: bold;
+                text-transform: uppercase;
+                letter-spacing: .06em;
+                padding: 3px 10px;
+                border-radius: 99px;
+                margin-top: 8px;
             }
         </style>
     </head>
@@ -252,7 +207,7 @@
 
         {{-- Header --}}
         <div class="header">
-            <div class="header-label">Session Report</div>
+            <div class="header-label">Session Report · Rehearse AI Coach</div>
             <div class="header-title">{{ $scenario->title }}</div>
             <div class="header-meta">
                 Session #{{ $conversation->id }} &nbsp;·&nbsp;
@@ -263,20 +218,21 @@
         {{-- Score hero --}}
         @if ($scores)
             <table
-                style="width: 100%; background: #f5f0ff; border-bottom: 2px solid #ede9fe; border-collapse: collapse;">
+                style="width: 100%; background: #f0f9f8; border-bottom: 2px solid #d0eeeb; border-collapse: collapse;">
                 <tr>
                     <td style="padding: 24px 0 24px 40px; width: 90px; vertical-align: middle;">
                         <div
-                            style="width: 72px; height: 72px; border-radius: 50%; border: 3px solid #7c3aed; text-align: center; padding-top: 18px;">
+                            style="width: 72px; height: 72px; border-radius: 50%; border: 3px solid #0f7c6e; text-align: center; padding-top: 18px;">
                             <span
-                                style="font-size: 22px; font-weight: bold; color: #7c3aed;">{{ $scores['final'] }}</span>
+                                style="font-size: 22px; font-weight: bold; color: #0f7c6e;">{{ $scores['final'] }}</span>
                         </div>
                     </td>
                     <td style="padding: 24px 40px 24px 16px; vertical-align: middle;">
                         <div
-                            style="font-size: 9px; font-weight: bold; text-transform: uppercase; letter-spacing: .1em; color: #9f7aea; margin-bottom: 4px;">
-                            Overall Performance</div>
-                        <div style="font-size: 16px; font-weight: bold; color: #1a1a2e; margin-bottom: 10px;">
+                            style="font-size: 9px; font-weight: bold; text-transform: uppercase; letter-spacing: .1em; color: #14a896; margin-bottom: 4px;">
+                            Overall Performance
+                        </div>
+                        <div style="font-size: 16px; font-weight: bold; color: #0d1f2d; margin-bottom: 10px;">
                             @if ($scores['final'] >= 80)
                                 Excellent
                             @elseif($scores['final'] >= 60)
@@ -289,15 +245,24 @@
                             <tr>
                                 @foreach (['clarity' => 'Clarity', 'confidence' => 'Confidence', 'objective' => 'Objective', 'adaptability' => 'Adaptability'] as $key => $label)
                                     <td style="text-align: center; padding-right: 20px;">
-                                        <div style="font-size: 14px; font-weight: bold; color: #7c3aed;">
-                                            {{ $scores[$key] ?? '—' }}</div>
+                                        <div style="font-size: 14px; font-weight: bold; color: #0f7c6e;">
+                                            {{ $scores[$key] ?? '—' }}
+                                        </div>
                                         <div
-                                            style="font-size: 9px; color: #888; text-transform: uppercase; letter-spacing: .06em;">
-                                            {{ $label }}</div>
+                                            style="font-size: 9px; color: #6b8299; text-transform: uppercase; letter-spacing: .06em;">
+                                            {{ $label }}
+                                        </div>
                                     </td>
                                 @endforeach
                             </tr>
                         </table>
+
+                        {{-- Completion rate badge if session was ended early --}}
+                        @if (!empty($scores['completion_rate']) && $scores['completion_rate'] < 100)
+                            <div class="completion-badge">
+                                {{ $scores['completion_rate'] }}% session completed
+                            </div>
+                        @endif
                     </td>
                 </tr>
             </table>
@@ -311,6 +276,7 @@
                     <div class="section-dot"></div>
                     <div class="section-title">Performance Breakdown</div>
                 </div>
+
                 @foreach (['clarity' => 'Clarity', 'confidence' => 'Confidence', 'objective' => 'Objective', 'adaptability' => 'Adaptability'] as $key => $label)
                     <div class="breakdown-row">
                         <div class="breakdown-top">
@@ -343,6 +309,7 @@
                 <div class="section-dot"></div>
                 <div class="section-title">Conversation Transcript</div>
             </div>
+
             @foreach ($messages as $msg)
                 @if ($msg->role !== 'system')
                     <div class="message {{ $msg->role }}">
@@ -356,8 +323,8 @@
 
             {{-- Footer --}}
             <div class="footer">
-                <span>{{ $scenario->title }} — Session #{{ $conversation->id }}</span>
-                <span>Generated {{ now()->format('F j, Y') }}</span>
+                <span>{{ $scenario->title }} · Session #{{ $conversation->id }}</span>
+                <span>Rehearse AI Coach · Generated {{ now()->format('F j, Y') }}</span>
             </div>
 
         </div>
