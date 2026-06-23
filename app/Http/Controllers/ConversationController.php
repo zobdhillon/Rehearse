@@ -170,9 +170,9 @@ class ConversationController extends Controller
             "- Session completion: {$completionRate}%\n\n" .
 
             "STRICT SCORING RULES:\n" .
-            "1. If completion is below 100%, NONE of the 4 dimension scores may exceed the completion percentage " .
-            "(e.g. if completion is 20%, no score can be above 20), because an incomplete session cannot " .
-            "demonstrate full competence regardless of how good the few answers were.\n" .
+            "1. If completion is below 100%, factor this into your scores — an incomplete session should score " .
+            "lower overall, but strong answers to completed questions should still be acknowledged. " .
+            "objective should be penalized the most since goals cannot be fully achieved in an incomplete session.\n"  .
             "2. Unanswered or skipped questions (interviewer turns with no matching candidate response, " .
             "or one-word/low-effort replies) count as a failure on that exchange — do not skip over them when scoring.\n" .
             "3. A short, well-phrased answer to 2 out of 10 questions does NOT deserve a high score just because " .
@@ -295,7 +295,14 @@ class ConversationController extends Controller
 
         foreach ($dimensions as $dim) {
             if (isset($scores[$dim])) {
-                $scores[$dim] = min((int) $scores[$dim], $completionRate);
+                $aiScore      = (int) $scores[$dim];
+                $blended      = ($aiScore * 0.7) + ($completionRate * 0.3);
+
+                if ($dim === 'objective') {
+                    $blended = ($aiScore * 0.5) + ($completionRate * 0.5);
+                }
+
+                $scores[$dim] = (int) floor($blended);
             }
         }
 
