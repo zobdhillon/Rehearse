@@ -36,6 +36,23 @@ const greeting = computed(() => {
     return "Good evening";
 });
 
+function plural(n, one, many = one + "s") {
+    return `${n} ${n === 1 ? one : many}`;
+}
+
+const improvement = computed(() => {
+    const v = Number(props.stats.scoreImprovement ?? 0);
+    if (!v) return null;
+    return {
+        label: `${v > 0 ? "+" : "−"}${Math.abs(v)} this month`,
+        positive: v > 0,
+    };
+});
+
+const unfinished = computed(
+    () => props.recentSessions.find((s) => !s.is_completed) ?? null,
+);
+
 const averageSkillScore = computed(() => {
     const values = skillsWithMeta.value
         .filter((s) => !s.isPending)
@@ -111,7 +128,7 @@ const skillsWithMeta = computed(() => {
             ...skill,
             value,
             delta,
-            isPending: value === 0,
+            isPending: !hasData,
         };
     });
 });
@@ -212,6 +229,15 @@ const radarPolygon = computed(() =>
 
 const radarGridRings = [25, 50, 75, 100];
 
+const radarRings = computed(() =>
+    radarGridRings.map((ring) =>
+        RADAR_ANGLES.map((a) => {
+            const p = radarPoint(ring, a, RADAR_CX, RADAR_CY, RADAR_MAX_R);
+            return `${p.x},${p.y}`;
+        }).join(" "),
+    ),
+);
+
 function skillAxisLabel(key) {
     return (
         {
@@ -225,6 +251,13 @@ function skillAxisLabel(key) {
 
 // ── New user state ────────────────────────────────────────
 const isNewUser = computed(() => (props.stats.completedSessions ?? 0) === 0);
+
+const lowestSkill = computed(() => {
+    if (isNewUser.value) return null;
+    const rated = skillsWithMeta.value.filter((s) => !s.isPending);
+    if (!rated.length) return null;
+    return rated.reduce((a, b) => (b.value < a.value ? b : a));
+});
 function scoreColor(score) {
     if (score === null || score === undefined)
         return { text: "var(--text-3)", bg: "var(--border)" };
@@ -325,7 +358,7 @@ function scoreColor(score) {
                                 >
                                     {{
                                         stats.completedSessions > 0
-                                            ? `${stats.completedSessions} sessions completed.`
+                                            ? `${plural(stats.completedSessions, "session")} completed.`
                                             : "Ready to practice?"
                                     }}
                                 </h1>
@@ -335,17 +368,6 @@ function scoreColor(score) {
                                 >
                                     <template v-if="stats.bestScore">
                                         Best score {{ stats.bestScore }}/100
-                                        <span
-                                            style="
-                                                color: var(--accent);
-                                                opacity: 0.6;
-                                                font-size: 8px;
-                                                vertical-align: middle;
-                                            "
-                                        >
-                                            ●</span
-                                        >
-                                        {{ currentLevel.title }}
                                     </template>
                                     <template v-else>
                                         Pick a scenario below to start your
@@ -362,10 +384,21 @@ function scoreColor(score) {
                                     class="flex flex-col gap-2 sm:flex-row sm:flex-wrap"
                                 >
                                     <Link
-                                        :href="route('scenarios.index')"
+                                        :href="
+                                            unfinished
+                                                ? route(
+                                                      'conversations.show',
+                                                      unfinished.id,
+                                                  )
+                                                : route('scenarios.index')
+                                        "
                                         class="btn-primary justify-center px-4 py-2 text-center text-[12px]"
                                     >
-                                        Start Practice
+                                        {{
+                                            unfinished
+                                                ? "Resume session"
+                                                : "Start Practice"
+                                        }}
                                         <svg
                                             width="11"
                                             height="11"
@@ -488,14 +521,15 @@ function scoreColor(score) {
                                     </div>
                                 </div>
                                 <span
-                                    v-if="stats.scoreImprovement"
+                                    v-if="improvement"
                                     class="flex-shrink-0 rounded px-2 py-0.5 text-[10px] font-semibold"
-                                    style="
-                                        background: var(--green-bg);
-                                        color: var(--green);
+                                    :style="
+                                        improvement.positive
+                                            ? 'background: var(--green-bg); color: var(--green)'
+                                            : 'background: var(--red-bg); color: var(--red)'
                                     "
                                 >
-                                    +{{ stats.scoreImprovement }} this month
+                                    {{ improvement.label }}
                                 </span>
                             </div>
 
@@ -517,17 +551,17 @@ function scoreColor(score) {
                                     style="height: 56px"
                                 >
                                     <span
-                                        class="text-[8px] font-medium leading-none tabular-nums"
+                                        class="10px] font-medium leading-none tabular-nums"
                                         style="color: var(--text-3)"
                                         >100</span
                                     >
                                     <span
-                                        class="text-[8px] font-medium leading-none tabular-nums"
+                                        class="text-[10px] font-medium leading-none tabular-nums"
                                         style="color: var(--text-3)"
                                         >50</span
                                     >
                                     <span
-                                        class="text-[8px] font-medium leading-none tabular-nums"
+                                        class="text-[10px] font-medium leading-none tabular-nums"
                                         style="color: var(--text-3)"
                                         >0</span
                                     >
@@ -830,205 +864,180 @@ function scoreColor(score) {
                         </div>
 
                         <!-- Has data: radar + skill badges -->
-                        <div
-                            v-else
-                            class="grid skills-grid gap-3 sm:gap-4 flex-1 min-h-0"
-                            style="
-                                grid-template-columns: 1fr 1fr;
-                                grid-template-areas: 'left right' 'circle circle';
-                            "
-                        >
-                            <!-- Left 2 badges -->
+                        <!-- Has data: skills + radar + focus tip -->
+                        <div v-else class="flex min-h-0 flex-1 flex-col gap-3">
                             <div
-                                class="flex flex-col gap-2"
-                                style="grid-area: left"
+                                class="grid min-h-0 flex-1 gap-4 md:grid-cols-[1fr_auto] md:items-center"
                             >
                                 <div
-                                    v-for="skill in skillsWithMeta.slice(0, 2)"
-                                    :key="skill.key"
-                                    class="flex items-center gap-3 rounded-xl px-3 py-2.5"
-                                    style="
-                                        background: var(--bg-surface2);
-                                        border: 1px solid var(--border);
-                                    "
+                                    class="grid grid-cols-1 gap-2 sm:grid-cols-2"
                                 >
                                     <div
-                                        class="h-8 w-1.5 flex-shrink-0 rounded-full"
-                                        :style="{
-                                            background: skill.isPending
-                                                ? 'var(--track-bg)'
-                                                : 'var(--gradient-primary)',
-                                        }"
-                                    />
-                                    <div class="min-w-0 flex-1">
-                                        <div
-                                            class="text-[11px] font-medium leading-tight"
-                                            style="color: var(--text-2)"
-                                        >
-                                            {{ skill.label }}
-                                        </div>
-                                        <div
-                                            class="mt-0.5 flex items-center gap-1.5"
-                                        >
-                                            <span
-                                                class="text-[13px] font-bold tabular-nums leading-none"
-                                                :style="
-                                                    skill.isPending
-                                                        ? 'color:var(--text-3)'
-                                                        : 'color:var(--text)'
-                                                "
-                                            >
-                                                {{
-                                                    skill.isPending
-                                                        ? "—"
-                                                        : `${skill.value}%`
-                                                }}
-                                            </span>
-                                            <span
-                                                v-if="skill.isPending"
-                                                class="text-[10px]"
-                                                style="color: var(--text-3)"
-                                                >Pending</span
-                                            >
-                                            <span
-                                                v-else-if="skill.delta !== 0"
-                                                class="rounded px-1.5 py-0.5 text-[10px] font-semibold"
-                                                style="
-                                                    background: var(--green-bg);
-                                                    color: var(--green);
-                                                "
-                                                >+{{ skill.delta }}%</span
-                                            >
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Right 2 badges -->
-                            <div
-                                class="flex flex-col gap-2"
-                                style="grid-area: right"
-                            >
-                                <div
-                                    v-for="skill in skillsWithMeta.slice(2, 4)"
-                                    :key="skill.key"
-                                    class="flex items-center gap-3 rounded-xl px-3 py-2.5"
-                                    style="
-                                        background: var(--bg-surface2);
-                                        border: 1px solid var(--border);
-                                    "
-                                >
-                                    <div
-                                        class="h-8 w-1.5 flex-shrink-0 rounded-full"
-                                        :style="{
-                                            background: skill.isPending
-                                                ? 'var(--track-bg)'
-                                                : 'var(--gradient-primary)',
-                                        }"
-                                    />
-                                    <div class="min-w-0 flex-1">
-                                        <div
-                                            class="text-[11px] font-medium leading-tight"
-                                            style="color: var(--text-2)"
-                                        >
-                                            {{ skill.label }}
-                                        </div>
-                                        <div
-                                            class="mt-0.5 flex items-center gap-1.5"
-                                        >
-                                            <span
-                                                class="text-[13px] font-bold tabular-nums leading-none"
-                                                :style="
-                                                    skill.isPending
-                                                        ? 'color:var(--text-3)'
-                                                        : 'color:var(--text)'
-                                                "
-                                            >
-                                                {{
-                                                    skill.isPending
-                                                        ? "—"
-                                                        : `${skill.value}%`
-                                                }}
-                                            </span>
-                                            <span
-                                                v-if="skill.isPending"
-                                                class="text-[10px]"
-                                                style="color: var(--text-3)"
-                                                >Pending</span
-                                            >
-                                            <span
-                                                v-else-if="skill.delta !== 0"
-                                                class="rounded px-1.5 py-0.5 text-[10px] font-semibold"
-                                                style="
-                                                    background: var(--green-bg);
-                                                    color: var(--green);
-                                                "
-                                                >+{{ skill.delta }}%</span
-                                            >
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Circle -->
-                            <div
-                                class="flex items-center justify-center"
-                                style="grid-area: circle"
-                            >
-                                <svg
-                                    viewBox="0 0 120 120"
-                                    class="h-auto w-[120px]"
-                                    role="img"
-                                    aria-label="Average skill score"
-                                >
-                                    <circle
-                                        cx="60"
-                                        cy="60"
-                                        r="50"
-                                        fill="none"
-                                        stroke="var(--track-bg)"
-                                        stroke-width="10"
-                                    />
-                                    <circle
-                                        cx="60"
-                                        cy="60"
-                                        r="50"
-                                        fill="none"
-                                        stroke="var(--accent)"
-                                        stroke-width="10"
-                                        stroke-linecap="round"
-                                        transform="rotate(-90 60 60)"
-                                        :stroke-dasharray="314"
-                                        :stroke-dashoffset="
-                                            314 -
-                                            (314 * averageSkillScore) / 100
-                                        "
+                                        v-for="skill in skillsWithMeta"
+                                        :key="skill.key"
+                                        class="flex items-center gap-3 rounded-xl px-3 py-2.5"
                                         style="
-                                            transition: stroke-dashoffset 1s
-                                                ease;
+                                            background: var(--bg-surface2);
+                                            border: 1px solid var(--border);
                                         "
-                                    />
-                                    <text
-                                        x="60"
-                                        y="56"
-                                        text-anchor="middle"
-                                        font-size="22"
-                                        font-weight="800"
-                                        fill="var(--text)"
                                     >
-                                        {{ averageSkillScore }}%
-                                    </text>
-                                    <text
-                                        x="60"
-                                        y="74"
-                                        text-anchor="middle"
-                                        font-size="10"
-                                        font-weight="600"
-                                        fill="var(--text-3)"
+                                        <div
+                                            class="h-8 w-1.5 flex-shrink-0 rounded-full"
+                                            :style="{
+                                                background: skill.isPending
+                                                    ? 'var(--track-bg)'
+                                                    : 'var(--gradient-primary)',
+                                            }"
+                                        />
+                                        <div class="min-w-0 flex-1">
+                                            <div
+                                                class="text-[11px] font-medium leading-tight"
+                                                style="color: var(--text-2)"
+                                            >
+                                                {{ skill.label }}
+                                            </div>
+                                            <div
+                                                class="mt-0.5 flex items-center gap-1.5"
+                                            >
+                                                <span
+                                                    class="text-[13px] font-bold tabular-nums leading-none"
+                                                    :style="
+                                                        skill.isPending
+                                                            ? 'color: var(--text-3)'
+                                                            : 'color: var(--text)'
+                                                    "
+                                                >
+                                                    {{
+                                                        skill.isPending
+                                                            ? "—"
+                                                            : `${skill.value}%`
+                                                    }}
+                                                </span>
+                                                <span
+                                                    v-if="skill.isPending"
+                                                    class="text-[10px]"
+                                                    style="color: var(--text-3)"
+                                                    >Pending</span
+                                                >
+                                                <span
+                                                    v-else-if="
+                                                        skill.delta !== 0
+                                                    "
+                                                    class="rounded px-1.5 py-0.5 text-[10px] font-semibold"
+                                                    :style="
+                                                        skill.delta > 0
+                                                            ? 'background: var(--green-bg); color: var(--green)'
+                                                            : 'background: var(--red-bg); color: var(--red)'
+                                                    "
+                                                >
+                                                    {{
+                                                        skill.delta > 0
+                                                            ? "+"
+                                                            : "−"
+                                                    }}{{
+                                                        Math.abs(skill.delta)
+                                                    }}%
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="flex flex-col items-center">
+                                    <svg
+                                        viewBox="-12 -12 224 224"
+                                        class="h-[190px] w-[190px]"
+                                        role="img"
+                                        aria-label="Skill balance chart"
                                     >
-                                        average
-                                    </text>
-                                </svg>
+                                        <polygon
+                                            v-for="(points, i) in radarRings"
+                                            :key="i"
+                                            :points="points"
+                                            fill="none"
+                                            stroke="var(--border-strong)"
+                                            stroke-width="0.75"
+                                        />
+                                        <line
+                                            v-for="s in radarSkills"
+                                            :key="s.key + '-axis'"
+                                            :x1="RADAR_CX"
+                                            :y1="RADAR_CY"
+                                            :x2="s.axis.x"
+                                            :y2="s.axis.y"
+                                            stroke="var(--border-strong)"
+                                            stroke-width="0.75"
+                                        />
+                                        <polygon
+                                            :points="radarPolygon"
+                                            fill="var(--accent)"
+                                            fill-opacity="0.22"
+                                            stroke="var(--accent)"
+                                            stroke-width="2"
+                                            stroke-linejoin="round"
+                                        />
+                                        <circle
+                                            v-for="s in radarSkills"
+                                            :key="s.key + '-dot'"
+                                            :cx="s.point.x"
+                                            :cy="s.point.y"
+                                            r="3"
+                                            fill="var(--accent)"
+                                        />
+                                        <text
+                                            v-for="s in radarSkills"
+                                            :key="s.key + '-label'"
+                                            :x="s.labelPos.x"
+                                            :y="s.labelPos.y"
+                                            text-anchor="middle"
+                                            dominant-baseline="middle"
+                                            font-size="10"
+                                            font-weight="600"
+                                            fill="var(--text-3)"
+                                        >
+                                            {{ skillAxisLabel(s.key) }}
+                                        </text>
+                                    </svg>
+                                    <div
+                                        class="mt-1 text-[11px]"
+                                        style="color: var(--text-3)"
+                                    >
+                                        Average
+                                        <span
+                                            class="font-bold"
+                                            style="color: var(--text)"
+                                            >{{ averageSkillScore }}%</span
+                                        >
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div
+                                v-if="lowestSkill"
+                                class="flex flex-shrink-0 flex-wrap items-center justify-between gap-3 rounded-xl px-4 py-3"
+                                style="
+                                    background: var(--accent-bg);
+                                    border: 1px solid var(--border);
+                                "
+                            >
+                                <p
+                                    class="text-[12px]"
+                                    style="color: var(--text-2)"
+                                >
+                                    Focus next:
+                                    <strong style="color: var(--text)">{{
+                                        lowestSkill.label
+                                    }}</strong>
+                                    is your lowest skill ({{
+                                        lowestSkill.value
+                                    }}%). Practice a scenario to improve it.
+                                </p>
+                                <Link
+                                    :href="route('scenarios.index')"
+                                    class="btn-primary px-3.5 py-1.5 text-[11px]"
+                                >
+                                    Practice now
+                                </Link>
                             </div>
                         </div>
                     </div>
@@ -1276,8 +1285,13 @@ function scoreColor(score) {
                     <div
                         class="flex-shrink-0 rounded-2xl p-4 mb-2 lg:mb-0"
                         style="
-                            background: #0f7c6e;
-                            box-shadow: 0 8px 24px rgba(15, 124, 110, 0.35);
+                            background: var(--gradient-primary);
+                            box-shadow: 0 8px 24px
+                                color-mix(
+                                    in srgb,
+                                    var(--accent) 30%,
+                                    transparent
+                                );
                             border: none;
                         "
                     >
@@ -1321,7 +1335,7 @@ function scoreColor(score) {
                                 >
                                     {{
                                         stats.currentStreak > 0
-                                            ? `Best: ${stats.bestStreak ?? 0}d`
+                                            ? "Active streak"
                                             : "No active streak"
                                     }}
                                 </div>
