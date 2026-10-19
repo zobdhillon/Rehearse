@@ -6,12 +6,13 @@ use App\Http\Controllers\MessageController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ScenarioController;
 use Illuminate\Support\Facades\Route;
+use Inertia\Inertia;
 
 Route::get(
     '/',
     fn() => auth()->check()
         ? redirect()->route('dashboard')
-        : redirect()->route('login')
+        : Inertia::render('Landing')
 );
 
 Route::get('/dashboard', [DashboardController::class, 'index'])
